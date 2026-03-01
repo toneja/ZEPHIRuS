@@ -5,6 +5,7 @@
 *   BASE:   RAK WIRELESS 19001                                                    *
 *   CORE:   RAK WIRELESS 4631                                                     *
 *   RELAY:  RAK WIRELESS 13007                                                    *
+*   SDCARD: RAK WIRELESS 15002 or Adafruit SDCard breakout board                  *
 *   GPS:    RAK WIRELESS 12500                                                    *
 *   TEMP:   RAK WIRELESS 1906                                                     *
 **********************************************************************************/
@@ -14,10 +15,14 @@
 #include <SparkFun_u-blox_GNSS_Arduino_Library.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME680.h>
+#include "SD.h"
 
 #define DEBUG 1
 
 BLEUart bleuart;
+
+// Log file
+File logFile;
 
 SFE_UBLOX_GNSS g_myGNSS;
 
@@ -35,11 +40,13 @@ void setup() {
   // LEDs
   led_init();
   // I2C
-  Wire.begin();
+  sensor_init();
   // BLUETOOTH
   ble_init();
   // RELAY
   relay_init();
+  // SDCARD
+  sd_init();
   // GPS
   gps_init();
   // TEMPERATURE
@@ -48,6 +55,7 @@ void setup() {
 
 void loop() {
   if (bleuart.available()) {
+    logFile.println("*** BLEUART WAKEUP ***");
 #if DEBUG
     Serial.println("*** BLEUART WAKEUP ***");
 #endif
@@ -61,6 +69,8 @@ void loop() {
     bme680_get();
     // Disconnect BLE
     Bluefruit.disconnect(zephyrusClient);
+    logFile.println("Sampling Complete. Nothing more to do.");
+    logFile.flush();
 #if DEBUG
     Serial.println("Sampling Complete. Nothing more to do.");
 #endif
@@ -76,6 +86,16 @@ void led_init(void) {
     digitalToggle(LED_BLUE);
     delay(100);
   }
+}
+
+void sensor_init(void) {
+  // 3V3_S
+  pinMode(WB_IO2, OUTPUT);
+  digitalWrite(WB_IO2, LOW);
+  delay(1000);
+  digitalWrite(WB_IO2, HIGH);
+  // I2C
+  Wire.begin();
 }
 
 void ble_init(void) {
@@ -103,6 +123,10 @@ void startAdv(void) {
 void ble_get(void) {
   String buffer = "";
   while (bleuart.available()) { buffer += (char)bleuart.read(); }
+  logFile.print("Wind Speed: ");
+  logFile.print(buffer);
+  logFile.println(" m/s");
+  logFile.flush();
 #if DEBUG
   Serial.print("Wind Speed: ");
   Serial.print(buffer);
@@ -115,6 +139,9 @@ void connect_callback(uint16_t conn_handle) {
   char central_name[32] = { 0 };
   connection->getPeerName(central_name, sizeof(central_name));
   zephyrusClient = conn_handle;
+  logFile.print("Connected to ");
+  logFile.println(central_name);
+  logFile.flush();
 #if DEBUG
   Serial.print("Connected to ");
   Serial.println(central_name);
@@ -124,6 +151,9 @@ void connect_callback(uint16_t conn_handle) {
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   (void) conn_handle;
   (void) reason;
+  logFile.print("Disconnected, reason = 0x");
+  logFile.println(reason, HEX);
+  logFile.flush();
 #if DEBUG
   Serial.print("Disconnected, reason = 0x");
   Serial.println(reason, HEX);
@@ -137,12 +167,46 @@ void relay_init(void) {
 }
 
 void relay_enable(void) {
+  logFile.println("Waking Fan...");
+  logFile.flush();
 #if DEBUG
   Serial.println("Waking Fan...");
 #endif
   digitalWrite(WB_IO4, HIGH);
   delay(5000);
   digitalWrite(WB_IO4, LOW);
+}
+
+void sd_init(void) {
+#if DEBUG
+  Serial.print("Mounting SD Card...");
+#endif
+  for (uint8_t i = 0; i < 10; i++) {
+    if (SD.begin()) {
+#if DEBUG
+      Serial.println("Card mounted.\n");
+#endif
+      logFile = SD.open("ZEPHYRUS.txt", FILE_WRITE);
+      if (logFile) {
+        logFile.println("ZEPHYRUS - PERIPHERAL: SAMPLER");
+        logFile.flush();
+      } else {
+#if DEBUG
+        Serial.println("ERROR: Unable to create LOG file.");
+#endif
+      }
+      return;
+    } else {
+#if DEBUG
+      Serial.print(".");
+#endif
+      delay(1000);
+      SD.end();
+    }
+  }
+#if DEBUG
+  Serial.println("No SD Card found.\n");
+#endif
 }
 
 void gps_init(void) {
@@ -154,6 +218,12 @@ void gps_init(void) {
 void gps_get(void) {
   long latitude = g_myGNSS.getLatitude();
   long longitude = g_myGNSS.getLongitude();
+  logFile.print("Lat: ");
+  logFile.print(latitude);
+  logFile.print(" Long: ");
+  logFile.print(longitude);
+  logFile.println(" (degrees * 10^-7)");
+  logFile.flush();
 #if DEBUG
   Serial.print("Lat: ");
   Serial.print(latitude);
@@ -170,6 +240,12 @@ void bme680_init(void) {
 
 void bme680_get(void) {
   bme.performReading();
+  logFile.print("Temperature = ");
+  logFile.print(bme.temperature);
+  logFile.print(" *C, ");
+  logFile.print(bme.temperature * 1.8 + 32);
+  logFile.println(" *F");
+  logFile.flush();
 #if DEBUG
   Serial.print("Temperature = ");
   Serial.print(bme.temperature);
