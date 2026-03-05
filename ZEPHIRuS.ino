@@ -28,8 +28,6 @@ SFE_UBLOX_GNSS g_myGNSS;
 
 Adafruit_BME680 bme;
 
-uint8_t zephirusClient = 0;
-
 void setup() {
 #if DEBUG
   // SERIAL
@@ -67,8 +65,6 @@ void loop() {
     gps_get();
     // Onboard temperature
     bme680_get();
-    // Disconnect BLE
-    Bluefruit.disconnect(zephirusClient);
     logFile.println("Sampling Complete. Nothing more to do.");
     logFile.flush();
 #if DEBUG
@@ -138,7 +134,6 @@ void connect_callback(uint16_t conn_handle) {
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
   char central_name[32] = { 0 };
   connection->getPeerName(central_name, sizeof(central_name));
-  zephirusClient = conn_handle;
   logFile.print("Connected to ");
   logFile.println(central_name);
   logFile.flush();
