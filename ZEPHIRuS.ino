@@ -84,6 +84,15 @@ void led_init(void) {
   }
 }
 
+void led_error(void) {
+  while (1) {
+    digitalToggle(LED_GREEN);
+    delay(500);
+    digitalToggle(LED_BLUE);
+    delay(500);
+  }
+}
+
 void sensor_init(void) {
   // 3V3_S
   pinMode(WB_IO2, OUTPUT);
@@ -189,6 +198,7 @@ void sd_init(void) {
 #if DEBUG
         Serial.println("ERROR: Unable to create LOG file.");
 #endif
+        led_error();
       }
       return;
     } else {
@@ -200,12 +210,18 @@ void sd_init(void) {
     }
   }
 #if DEBUG
-  Serial.println("No SD Card found.\n");
+  Serial.println("ERROR: No SD Card found.\n");
 #endif
+  led_error();
 }
 
 void gps_init(void) {
-  g_myGNSS.begin();
+  if (!g_myGNSS.begin()) {
+#if DEBUG
+    Serial.println("ERROR: GPS not found.");
+#endif
+    led_error();
+  }
   g_myGNSS.setI2COutput(COM_TYPE_UBX);
   g_myGNSS.saveConfigSelective(VAL_CFG_SUBSEC_IOPORT);
 }
@@ -229,7 +245,12 @@ void gps_get(void) {
 }
 
 void bme680_init(void) {
-  bme.begin(0x76);
+  if (bme.begin(0x76)) {
+#if DEBUG
+    Serial.println("ERROR: BME680 not found.");
+#endif
+    led_error();
+  }
   bme.setTemperatureOversampling(BME680_OS_8X);
 }
 
