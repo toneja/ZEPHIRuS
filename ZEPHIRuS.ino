@@ -39,8 +39,6 @@ void setup() {
   led_init();
   // I2C
   sensor_init();
-  // BLUETOOTH
-  ble_init();
   // RELAY
   relay_init();
   // SDCARD
@@ -49,6 +47,8 @@ void setup() {
   gps_init();
   // TEMPERATURE
   bme680_init();
+  // BLUETOOTH
+  ble_init();
 }
 
 void loop() {
