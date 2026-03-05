@@ -1,5 +1,5 @@
 /**********************************************************************************
-* ZEPHYRUS: Zonal Epidemiologically-driven Plant Health Yield Risk Uptake Sampler *
+* ZEPHIRuS: Zonal Epidemiological Plant Health Inoculum Risk Sampler              *
 *                                                                                 *
 * Expected hardware components:                                                   *
 *   BASE:   RAK WIRELESS 19001                                                    *
@@ -28,14 +28,14 @@ SFE_UBLOX_GNSS g_myGNSS;
 
 Adafruit_BME680 bme;
 
-uint8_t zephyrusClient = 0;
+uint8_t zephirusClient = 0;
 
 void setup() {
 #if DEBUG
   // SERIAL
   Serial.begin(115200);
   while (!Serial) { delay(100); }
-  Serial.println("ZEPHYRUS - PERIPHERAL: SAMPLER");
+  Serial.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
 #endif
   // LEDs
   led_init();
@@ -68,7 +68,7 @@ void loop() {
     // Onboard temperature
     bme680_get();
     // Disconnect BLE
-    Bluefruit.disconnect(zephyrusClient);
+    Bluefruit.disconnect(zephirusClient);
     logFile.println("Sampling Complete. Nothing more to do.");
     logFile.flush();
 #if DEBUG
@@ -102,7 +102,7 @@ void ble_init(void) {
   Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
   Bluefruit.begin();
   Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
-  Bluefruit.setName("ZEPHYRUS - SAMPLER");
+  Bluefruit.setName("ZEPHIRuS - SAMPLER");
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
   bleuart.begin();
@@ -138,7 +138,7 @@ void connect_callback(uint16_t conn_handle) {
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
   char central_name[32] = { 0 };
   connection->getPeerName(central_name, sizeof(central_name));
-  zephyrusClient = conn_handle;
+  zephirusClient = conn_handle;
   logFile.print("Connected to ");
   logFile.println(central_name);
   logFile.flush();
@@ -186,9 +186,9 @@ void sd_init(void) {
 #if DEBUG
       Serial.println("Card mounted.\n");
 #endif
-      logFile = SD.open("ZEPHYRUS.txt", FILE_WRITE);
+      logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
       if (logFile) {
-        logFile.println("ZEPHYRUS - PERIPHERAL: SAMPLER");
+        logFile.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
         logFile.flush();
       } else {
 #if DEBUG
