@@ -220,6 +220,8 @@ void gps_init(void) {
 #if DEBUG
     Serial.println("ERROR: GPS not found.");
 #endif
+    logFile.println("ERROR: GPS not found.");
+    logFile.flush();
     led_error();
   }
   g_myGNSS.setI2COutput(COM_TYPE_UBX);
@@ -249,6 +251,8 @@ void bme680_init(void) {
 #if DEBUG
     Serial.println("ERROR: BME680 not found.");
 #endif
+    logFile.println("ERROR: BME680 not found.");
+    logFile.flush();
     led_error();
   }
   bme.setTemperatureOversampling(BME680_OS_8X);
