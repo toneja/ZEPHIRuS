@@ -28,7 +28,7 @@ SFE_UBLOX_GNSS g_myGNSS;
 
 Adafruit_BME680 bme;
 
-uint8_t zephirusClient = 0;
+uint8_t zephirusClient = BLE_CONN_HANDLE_INVALID;
 
 void setup() {
 #if DEBUG
@@ -111,7 +111,7 @@ void ble_init(void) {
   Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
   Bluefruit.begin();
   Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
-  Bluefruit.setName("ZEPHIRuS - SAMPLER");
+  Bluefruit.setName("ZEPHIRuS-SAMPLER");
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
   bleuart.begin();
@@ -167,7 +167,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   Serial.print("Disconnected, reason = 0x");
   Serial.println(reason, HEX);
 #endif
-  if (reason == 0x8) { Bluefruit.Advertising.start(0); }
+  if (reason == BLE_HCI_CONNECTION_TIMEOUT) { Bluefruit.Advertising.start(0); }
 }
 
 void relay_init(void) {
