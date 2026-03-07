@@ -252,7 +252,7 @@ void gps_get(void) {
 }
 
 void bme680_init(void) {
-  if (bme.begin(0x76)) {
+  if (!bme.begin(0x76)) {
 #if DEBUG
     Serial.println("ERROR: BME680 not found.");
 #endif
