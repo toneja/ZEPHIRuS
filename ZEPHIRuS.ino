@@ -67,13 +67,13 @@ void loop() {
     gps_get();
     // Onboard temperature
     bme680_get();
-    // Disconnect BLE
-    Bluefruit.disconnect(zephirusClient);
     logFile.println("Sampling Complete. Nothing more to do.");
     logFile.flush();
 #if DEBUG
     Serial.println("Sampling Complete. Nothing more to do.");
 #endif
+    sensor_deinit();
+    led_complete();
   }
 }
 
@@ -97,6 +97,16 @@ void led_error(void) {
   }
 }
 
+void led_complete(void) {
+  digitalWrite(LED_GREEN, LOW);
+  while (1) {
+    digitalWrite(LED_BLUE, HIGH);
+    delay(1000);
+    digitalWrite(LED_BLUE, LOW);
+    delay(10000);
+  }
+}
+
 void sensor_init(void) {
   // 3V3_S
   pinMode(WB_IO2, OUTPUT);
@@ -105,6 +115,18 @@ void sensor_init(void) {
   digitalWrite(WB_IO2, HIGH);
   // I2C
   Wire.begin();
+}
+
+void sensor_deinit(void) {
+  Bluefruit.Advertising.stop();
+  Bluefruit.disconnect(zephirusClient);
+  Bluefruit.setTxPower(0);
+  g_myGNSS.end();
+  Wire.end();
+  digitalWrite(WB_IO2, LOW);
+#if DEBUG
+  Serial.end();
+#endif
 }
 
 void ble_init(void) {
