@@ -69,6 +69,7 @@ void loop() {
     bme680_get();
     logFile.println("Sampling Complete. Nothing more to do.");
     logFile.flush();
+    logFile.close();
 #if DEBUG
     Serial.println("Sampling Complete. Nothing more to do.");
 #endif
@@ -122,6 +123,7 @@ void sensor_deinit(void) {
   Bluefruit.disconnect(zephirusClient);
   Bluefruit.setTxPower(0);
   g_myGNSS.end();
+  SD.end();
   Wire.end();
   digitalWrite(WB_IO2, LOW);
 #if DEBUG
