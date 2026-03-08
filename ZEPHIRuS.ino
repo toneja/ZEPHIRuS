@@ -283,6 +283,7 @@ void bme680_init(void) {
     led_error();
   }
   bme.setTemperatureOversampling(BME680_OS_8X);
+  bme.setGasHeater(0, 0);
 }
 
 void bme680_get(void) {
