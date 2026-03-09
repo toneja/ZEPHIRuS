@@ -58,13 +58,11 @@ void setup() {
 }
 
 void loop() {
-  if (bleuart.available()) {
+  if (bleuart.available() && ble_get()) {
     logFile.println("*** BLEUART WAKEUP ***");
 #if DEBUG
     Serial.println("*** BLEUART WAKEUP ***");
 #endif
-    // Read data from BLEUART
-    if (!ble_get()) { return; }
     // RELAY - ENABLE FAN
     relay_enable();
     // GPS Coordinates at time of sampling
@@ -80,6 +78,7 @@ void loop() {
     teardown();
     led_complete();
   }
+  delay(1000);
 }
 
 void led_init(void) {
