@@ -77,7 +77,7 @@ void loop() {
 #if DEBUG
     Serial.println("Sampling Complete. Nothing more to do.");
 #endif
-    sensor_deinit();
+    teardown();
     led_complete();
   }
 }
@@ -122,7 +122,7 @@ void sensor_init(void) {
   Wire.begin();
 }
 
-void sensor_deinit(void) {
+void teardown(void) {
   Bluefruit.Advertising.stop();
   Bluefruit.disconnect(zephirusClient);
   Bluefruit.setTxPower(0);
