@@ -19,16 +19,20 @@
 
 #define DEBUG 1
 
+// BLUETOOTH
 BLEUart bleuart;
+uint8_t zephirusClient = BLE_CONN_HANDLE_INVALID;
+String buffer;
+uint8_t wSpd = 3;
 
 // Log file
 File logFile;
 
+// GPS
 SFE_UBLOX_GNSS g_myGNSS;
 
+// TEMPERATURE
 Adafruit_BME680 bme;
-
-uint8_t zephirusClient = BLE_CONN_HANDLE_INVALID;
 
 void setup() {
 #if DEBUG
@@ -60,7 +64,7 @@ void loop() {
     Serial.println("*** BLEUART WAKEUP ***");
 #endif
     // Read data from BLEUART
-    ble_get();
+    if (!ble_get()) { return; }
     // RELAY - ENABLE FAN
     relay_enable();
     // GPS Coordinates at time of sampling
@@ -153,18 +157,22 @@ void startAdv(void) {
   Bluefruit.Advertising.start(0);
 }
 
-void ble_get(void) {
-  String buffer = "";
+bool ble_get(void) {
+  buffer = "";
   while (bleuart.available()) { buffer += (char)bleuart.read(); }
-  logFile.print("Wind Speed: ");
-  logFile.print(buffer);
-  logFile.println(" m/s");
-  logFile.flush();
+  if (buffer.toFloat() >= wSpd) {
+    logFile.print("Wind Speed: ");
+    logFile.print(buffer);
+    logFile.println(" m/s");
+    logFile.flush();
 #if DEBUG
-  Serial.print("Wind Speed: ");
-  Serial.print(buffer);
-  Serial.println(" m/s");
+    Serial.print("Wind Speed: ");
+    Serial.print(buffer);
+    Serial.println(" m/s");
 #endif
+    return true;
+  }
+  return false;
 }
 
 void connect_callback(uint16_t conn_handle) {
