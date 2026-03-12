@@ -1,5 +1,5 @@
 /**********************************************************************************
-* ZEPHIRuS: Zonal Epidemiological Plant Health Inoculum Risk Sampler              *
+* ZEPHIRuS: Zonal Epidemiology Plant Health Inoculum Risk Sampler                 *
 *                                                                                 *
 * Expected hardware components:                                                   *
 *   BASE:   RAK WIRELESS 19001                                                    *
