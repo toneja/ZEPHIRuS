@@ -179,6 +179,7 @@ void connect_callback(uint16_t conn_handle) {
   char central_name[32] = { 0 };
   connection->getPeerName(central_name, sizeof(central_name));
   zephirusClient = conn_handle;
+  Bluefruit.Advertising.stop();
   logFile.print("Connected to ");
   logFile.println(central_name);
   logFile.flush();
