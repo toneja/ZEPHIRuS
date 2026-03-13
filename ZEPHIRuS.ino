@@ -219,36 +219,25 @@ void relay_enable(void) {
 }
 
 void sd_init(void) {
+  if (SD.begin()) {
 #if DEBUG
-  Serial.print("Mounting SD Card...");
+    Serial.println("SD Card mounted.\n");
 #endif
-  for (uint8_t i = 0; i < 10; i++) {
-    if (SD.begin()) {
-#if DEBUG
-      Serial.println("Card mounted.\n");
-#endif
-      logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
-      if (logFile) {
-        logFile.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
-        logFile.flush();
-      } else {
-#if DEBUG
-        Serial.println("ERROR: Unable to create LOG file.");
-#endif
-        led_error();
-      }
+    logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
+    if (logFile) {
+      logFile.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
+      logFile.flush();
       return;
     } else {
 #if DEBUG
-      Serial.print(".");
+      Serial.println("ERROR: Unable to create LOG file.");
 #endif
-      delay(1000);
-      SD.end();
     }
-  }
+  } else {
 #if DEBUG
-  Serial.println("ERROR: No SD Card found.\n");
+    Serial.println("ERROR: No SD Card found.\n");
 #endif
+  }
   led_error();
 }
 
