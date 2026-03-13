@@ -137,7 +137,7 @@ void teardown(void) {
 void ble_init(void) {
   Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
   Bluefruit.begin();
-  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
+  Bluefruit.setTxPower(8);    // Check bluefruit.h for supported values
   Bluefruit.setName("ZEPHIRuS-SAMPLER");
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
