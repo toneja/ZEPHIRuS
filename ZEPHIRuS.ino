@@ -124,7 +124,7 @@ void sensor_init(void) {
 void teardown(void) {
   Bluefruit.Advertising.stop();
   Bluefruit.disconnect(zephirusClient);
-  Bluefruit.setTxPower(0);
+  Bluefruit.setTxPower(-40);
   g_myGNSS.end();
   SD.end();
   Wire.end();
