@@ -22,8 +22,22 @@
 // BLUETOOTH
 BLEUart bleuart;
 uint8_t zephirusClient = BLE_CONN_HANDLE_INVALID;
-String buffer;
-uint8_t wSpd = 3;
+#define BLE_BUF_SIZE 32 // more than we need, for now
+char buffer[BLE_BUF_SIZE];
+
+// BLEUart Sensor Data
+struct EnvironmentData {
+  float windTemp;
+  float windSpeed;
+  float windGust;
+  // float leafWetness;
+};
+EnvironmentData observed;
+EnvironmentData targeted;
+// TARGETED VALUES; read this from a config file
+#define WIND_SPEED 3.00 // m/s
+#define WIND_GUST 3.00  // m/s
+#define WIND_TEMP 0.0   // *C
 
 // Log file
 File logFile;
@@ -55,6 +69,10 @@ void setup() {
   bme680_init();
   // BLUETOOTH
   ble_init();
+  // Target Values
+  targeted.windSpeed = WIND_SPEED;
+  targeted.windGust = WIND_GUST;
+  targeted.windTemp = WIND_TEMP;
 }
 
 void loop() {
@@ -157,18 +175,27 @@ void startAdv(void) {
 }
 
 bool ble_get(void) {
-  buffer = "";
-  while (bleuart.available()) { buffer += (char)bleuart.read(); }
-  if (buffer.toFloat() >= wSpd) {
-    logFile.print("Wind Speed: ");
-    logFile.print(buffer);
-    logFile.println(" m/s");
-    logFile.flush();
+  int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
+  buffer[len] = '\0';
+  sscanf(buffer,
+        "%f, %f, %f",
+        &observed.windSpeed,
+        &observed.windGust,
+        &observed.windTemp);
 #if DEBUG
-    Serial.print("Wind Speed: ");
-    Serial.print(buffer);
-    Serial.println(" m/s");
+  Serial.print("WindSpeed: ");
+  Serial.print(observed.windSpeed);
+  Serial.print(", WindGust: ");
+  Serial.print(observed.windGust);
+  Serial.print(", WindTemp: ");
+  Serial.println(observed.windTemp);
 #endif
+  if ((observed.windSpeed >= targeted.windSpeed) &&
+      (observed.windGust >= targeted.windGust) &&
+      (observed.windTemp >= targeted.windTemp)) {
+    logFile.println("WindSpeed, WindGust, WindTemp");
+    logFile.println(buffer);
+    logFile.flush();
     return true;
   }
   return false;
