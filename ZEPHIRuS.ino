@@ -1,14 +1,14 @@
-/**********************************************************************************
-* ZEPHIRuS: Zonal Epidemiology Plant Health Inoculum Risk Sampler                 *
-*                                                                                 *
-* Expected hardware components:                                                   *
-*   BASE:   RAK WIRELESS 19001                                                    *
-*   CORE:   RAK WIRELESS 4631                                                     *
-*   RELAY:  RAK WIRELESS 13007                                                    *
-*   SDCARD: RAK WIRELESS 15002                                                    *
-*   GPS:    RAK WIRELESS 12500                                                    *
-*   TEMP:   RAK WIRELESS 1906                                                     *
-**********************************************************************************/
+/******************************************************************
+* ZEPHIRuS: Zonal Epidemiology Plant Health Inoculum Risk Sampler *
+*                                                                 *
+* Expected hardware components:                                   *
+*   BASE:   RAK WIRELESS 19001                                    *
+*   CORE:   RAK WIRELESS 4631                                     *
+*   RELAY:  RAK WIRELESS 13007                                    *
+*   SDCARD: RAK WIRELESS 15002                                    *
+*   GPS:    RAK WIRELESS 12500                                    *
+*   TEMP:   RAK WIRELESS 1906                                     *
+******************************************************************/
 
 #include <bluefruit.h>
 #include <Wire.h>
