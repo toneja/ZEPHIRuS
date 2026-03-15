@@ -52,7 +52,7 @@ void setup() {
 #if DEBUG
   // SERIAL
   Serial.begin(115200);
-  while (!Serial) { delay(100); }
+  // while (!Serial) { delay(100); }
   Serial.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
 #endif
   // LEDs
