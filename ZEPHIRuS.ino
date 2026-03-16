@@ -42,8 +42,9 @@ EnvironmentData targeted;
 // Log file
 File logFile;
 
-// GPS
+// GPS: position + timestamp
 SFE_UBLOX_GNSS g_myGNSS;
+char timestamp[19];
 
 // TEMPERATURE
 Adafruit_BME680 bme;
@@ -77,7 +78,9 @@ void setup() {
 
 void loop() {
   if (bleuart.available() && ble_get()) {
-    logFile.println("*** BLEUART WAKEUP ***");
+    // Timestamp
+    logFile.print(gps_gettime());
+    logFile.println(": *** BLEUART WAKEUP ***");
 #if DEBUG
     Serial.println("*** BLEUART WAKEUP ***");
 #endif
@@ -87,7 +90,8 @@ void loop() {
     gps_get();
     // Onboard temperature
     bme680_get();
-    logFile.println("Sampling Complete. Nothing more to do.");
+    logFile.print(gps_gettime());
+    logFile.println(": Sampling Complete. Nothing more to do.");
     logFile.flush();
     logFile.close();
 #if DEBUG
@@ -96,6 +100,7 @@ void loop() {
     teardown();
     led_complete();
   }
+  digitalWrite(LED_GREEN, LOW);
   delay(1000);
 }
 
@@ -175,6 +180,7 @@ void startAdv(void) {
 }
 
 bool ble_get(void) {
+  digitalWrite(LED_GREEN, HIGH);
   int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
   buffer[len] = '\0';
   char *token;
@@ -195,8 +201,13 @@ bool ble_get(void) {
   if ((observed.windSpeed >= targeted.windSpeed) &&
       (observed.windGust >= targeted.windGust) &&
       (observed.windTemp >= targeted.windTemp)) {
-    logFile.println("WindSpeed, WindGust, WindTemp");
-    logFile.println(buffer);
+    logFile.print(gps_gettime());
+    logFile.print(": WindSpeed: ");
+    logFile.print(observed.windSpeed);
+    logFile.print(", WindGust: ");
+    logFile.print(observed.windGust);
+    logFile.print(", WindTemp: ");
+    logFile.println(observed.windTemp);
     logFile.flush();
     return true;
   }
@@ -209,7 +220,8 @@ void connect_callback(uint16_t conn_handle) {
   connection->getPeerName(central_name, sizeof(central_name));
   zephirusClient = conn_handle;
   Bluefruit.Advertising.stop();
-  logFile.print("Connected to ");
+  logFile.print(gps_gettime());
+  logFile.print(": Connected to ");
   logFile.println(central_name);
   logFile.flush();
 #if DEBUG
@@ -221,7 +233,8 @@ void connect_callback(uint16_t conn_handle) {
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   (void) conn_handle;
   (void) reason;
-  logFile.print("Disconnected, reason = 0x");
+  logFile.print(gps_gettime());
+  logFile.print(": Disconnected, reason = 0x");
   logFile.println(reason, HEX);
   logFile.flush();
 #if DEBUG
@@ -237,7 +250,8 @@ void relay_init(void) {
 }
 
 void relay_enable(void) {
-  logFile.println("Waking Fan...");
+  logFile.print(gps_gettime());
+  logFile.println(": Waking Fan...");
   logFile.flush();
 #if DEBUG
   Serial.println("Waking Fan...");
@@ -254,7 +268,8 @@ void sd_init(void) {
 #endif
     logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
     if (logFile) {
-      logFile.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
+      logFile.print(gps_gettime());
+      logFile.println(": ZEPHIRuS - PERIPHERAL: SAMPLER");
       logFile.flush();
       return;
     } else {
@@ -275,18 +290,26 @@ void gps_init(void) {
 #if DEBUG
     Serial.println("ERROR: GPS not found.");
 #endif
-    logFile.println("ERROR: GPS not found.");
+    logFile.print(gps_gettime());
+    logFile.println(": ERROR: GPS not found.");
     logFile.flush();
     led_error();
   }
   g_myGNSS.setI2COutput(COM_TYPE_UBX);
   g_myGNSS.saveConfigSelective(VAL_CFG_SUBSEC_IOPORT);
+  // Wait on the GPS fix for accurate timestamps
+  while (g_myGNSS.getFixType() == 0) {
+    digitalToggle(LED_GREEN);
+    digitalToggle(LED_BLUE);
+    delay(100);
+  }
 }
 
 void gps_get(void) {
   long latitude = g_myGNSS.getLatitude();
   long longitude = g_myGNSS.getLongitude();
-  logFile.print("Lat: ");
+  logFile.print(gps_gettime());
+  logFile.print(": Lat: ");
   logFile.print(latitude);
   logFile.print(" Long: ");
   logFile.print(longitude);
@@ -301,12 +324,21 @@ void gps_get(void) {
 #endif
 }
 
+char* gps_gettime(void) {
+  sprintf(timestamp,
+          "%d-%02d-%02d,%02d:%02d:%02d",
+          g_myGNSS.getYear(), g_myGNSS.getMonth(), g_myGNSS.getDay(),
+          g_myGNSS.getHour(), g_myGNSS.getMinute(), g_myGNSS.getSecond());
+  return timestamp;
+}
+
 void bme680_init(void) {
   if (!bme.begin(0x76)) {
 #if DEBUG
     Serial.println("ERROR: BME680 not found.");
 #endif
-    logFile.println("ERROR: BME680 not found.");
+    logFile.print(gps_gettime());
+    logFile.println(": ERROR: BME680 not found.");
     logFile.flush();
     led_error();
   }
@@ -316,7 +348,8 @@ void bme680_init(void) {
 
 void bme680_get(void) {
   bme.performReading();
-  logFile.print("Temperature = ");
+  logFile.print(gps_gettime());
+  logFile.print(": Temperature = ");
   logFile.print(bme.temperature);
   logFile.print(" *C, ");
   logFile.print(bme.temperature * 1.8 + 32);
