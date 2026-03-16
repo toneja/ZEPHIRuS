@@ -27,9 +27,9 @@ char buffer[BLE_BUF_SIZE];
 
 // BLEUart Sensor Data
 struct EnvironmentData {
-  float windTemp;
   float windSpeed;
   float windGust;
+  float windTemp;
   // float leafWetness;
 };
 EnvironmentData observed;
@@ -177,11 +177,13 @@ void startAdv(void) {
 bool ble_get(void) {
   int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
   buffer[len] = '\0';
-  sscanf(buffer,
-        "%f, %f, %f",
-        &observed.windSpeed,
-        &observed.windGust,
-        &observed.windTemp);
+  char *token;
+  token = strtok(buffer, ", ");
+  if (token) observed.windSpeed = atof(token);
+  token = strtok(NULL, ", ");
+  if (token) observed.windGust = atof(token);
+  token = strtok(NULL, ", ");
+  if (token) observed.windTemp = atof(token);
 #if DEBUG
   Serial.print("WindSpeed: ");
   Serial.print(observed.windSpeed);
