@@ -39,8 +39,9 @@ EnvironmentData targeted;
 #define WIND_GUST 3.00  // m/s
 #define WIND_TEMP 0.0   // *C
 
-// Log file
+// Log files
 File logFile;
+File csvFile;
 
 // GPS: position + timestamp
 SFE_UBLOX_GNSS g_myGNSS;
@@ -62,10 +63,10 @@ void setup() {
   sensor_init();
   // RELAY
   relay_init();
-  // SDCARD
-  sd_init();
   // GPS
   gps_init();
+  // SDCARD
+  sd_init();
   // TEMPERATURE
   bme680_init();
   // BLUETOOTH
@@ -77,12 +78,13 @@ void setup() {
 }
 
 void loop() {
+  // Timestamp
+  gps_gettime();
   if (bleuart.available() && ble_get()) {
-    // Timestamp
-    logFile.print(gps_gettime());
-    logFile.println(": *** BLEUART WAKEUP ***");
+    logFile.print(timestamp);
+    logFile.print(": *** BLEUART WAKEUP: ");
 #if DEBUG
-    Serial.println("*** BLEUART WAKEUP ***");
+    Serial.print("*** BLEUART WAKEUP: ");
 #endif
     // RELAY - ENABLE FAN
     relay_enable();
@@ -90,17 +92,24 @@ void loop() {
     gps_get();
     // Onboard temperature
     bme680_get();
-    logFile.print(gps_gettime());
+    logFile.print(timestamp);
     logFile.println(": Sampling Complete. Nothing more to do.");
     logFile.flush();
     logFile.close();
+    csvFile.print(",");
+    csvFile.print(observed.windSpeed);
+    csvFile.print(",");
+    csvFile.print(observed.windGust);
+    csvFile.print(",");
+    csvFile.println(observed.windTemp);
+    csvFile.flush();
+    csvFile.close();
 #if DEBUG
     Serial.println("Sampling Complete. Nothing more to do.");
 #endif
     teardown();
     led_complete();
   }
-  digitalWrite(LED_GREEN, LOW);
   delay(1000);
 }
 
@@ -128,7 +137,7 @@ void led_complete(void) {
   digitalWrite(LED_GREEN, LOW);
   while (1) {
     digitalWrite(LED_BLUE, HIGH);
-    delay(1000);
+    delay(500);
     digitalWrite(LED_BLUE, LOW);
     delay(10000);
   }
@@ -201,7 +210,7 @@ bool ble_get(void) {
   if ((observed.windSpeed >= targeted.windSpeed) &&
       (observed.windGust >= targeted.windGust) &&
       (observed.windTemp >= targeted.windTemp)) {
-    logFile.print(gps_gettime());
+    logFile.print(timestamp);
     logFile.print(": WindSpeed: ");
     logFile.print(observed.windSpeed);
     logFile.print(", WindGust: ");
@@ -211,6 +220,7 @@ bool ble_get(void) {
     logFile.flush();
     return true;
   }
+  digitalWrite(LED_GREEN, LOW);
   return false;
 }
 
@@ -220,7 +230,7 @@ void connect_callback(uint16_t conn_handle) {
   connection->getPeerName(central_name, sizeof(central_name));
   zephirusClient = conn_handle;
   Bluefruit.Advertising.stop();
-  logFile.print(gps_gettime());
+  logFile.print(timestamp);
   logFile.print(": Connected to ");
   logFile.println(central_name);
   logFile.flush();
@@ -233,7 +243,7 @@ void connect_callback(uint16_t conn_handle) {
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   (void) conn_handle;
   (void) reason;
-  logFile.print(gps_gettime());
+  logFile.print(timestamp);
   logFile.print(": Disconnected, reason = 0x");
   logFile.println(reason, HEX);
   logFile.flush();
@@ -250,7 +260,7 @@ void relay_init(void) {
 }
 
 void relay_enable(void) {
-  logFile.print(gps_gettime());
+  logFile.print(timestamp);
   logFile.println(": Waking Fan...");
   logFile.flush();
 #if DEBUG
@@ -268,7 +278,7 @@ void sd_init(void) {
 #endif
     logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
     if (logFile) {
-      logFile.print(gps_gettime());
+      logFile.print(timestamp);
       logFile.println(": ZEPHIRuS - PERIPHERAL: SAMPLER");
       logFile.flush();
       return;
@@ -290,7 +300,7 @@ void gps_init(void) {
 #if DEBUG
     Serial.println("ERROR: GPS not found.");
 #endif
-    logFile.print(gps_gettime());
+    logFile.print(timestamp);
     logFile.println(": ERROR: GPS not found.");
     logFile.flush();
     led_error();
@@ -303,52 +313,59 @@ void gps_init(void) {
     digitalToggle(LED_BLUE);
     delay(100);
   }
+  gps_gettime();
 }
 
 void gps_get(void) {
   long latitude = g_myGNSS.getLatitude();
   long longitude = g_myGNSS.getLongitude();
-  logFile.print(gps_gettime());
+  logFile.print(timestamp);
   logFile.print(": Lat: ");
-  logFile.print(latitude);
+  logFile.print(latitude / 10000000.0, 7);
   logFile.print(" Long: ");
-  logFile.print(longitude);
-  logFile.println(" (degrees * 10^-7)");
+  logFile.print(longitude / 10000000.0, 7);
+  logFile.println(" degrees");
   logFile.flush();
+  csvFile.print(timestamp);
+  csvFile.print(",");
+  csvFile.print(latitude / 10000000.0, 7);
+  csvFile.print(",");
+  csvFile.print(longitude / 10000000.0, 7);
+  csvFile.flush();
 #if DEBUG
   Serial.print("Lat: ");
-  Serial.print(latitude);
+  Serial.print(latitude / 10000000.0, 7);
   Serial.print(" Long: ");
-  Serial.print(longitude);
-  Serial.println(" (degrees * 10^-7)");
+  Serial.print(longitude / 10000000.0, 7);
+  Serial.println(" degrees");
 #endif
 }
 
-char* gps_gettime(void) {
+void gps_gettime(void) {
   sprintf(timestamp,
           "%d-%02d-%02d,%02d:%02d:%02d",
           g_myGNSS.getYear(), g_myGNSS.getMonth(), g_myGNSS.getDay(),
           g_myGNSS.getHour(), g_myGNSS.getMinute(), g_myGNSS.getSecond());
-  return timestamp;
 }
 
 void bme680_init(void) {
   if (!bme.begin(0x76)) {
 #if DEBUG
-    Serial.println("ERROR: BME680 not found.");
+    Serial.println("WARNING: BME680 not found.");
 #endif
-    logFile.print(gps_gettime());
-    logFile.println(": ERROR: BME680 not found.");
+    logFile.print(timestamp);
+    logFile.println(": WARNING: BME680 not found.");
     logFile.flush();
-    led_error();
+    // led_error();
   }
   bme.setTemperatureOversampling(BME680_OS_8X);
+  // save power
   bme.setGasHeater(0, 0);
 }
 
 void bme680_get(void) {
   bme.performReading();
-  logFile.print(gps_gettime());
+  logFile.print(timestamp);
   logFile.print(": Temperature = ");
   logFile.print(bme.temperature);
   logFile.print(" *C, ");
