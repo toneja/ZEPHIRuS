@@ -20,6 +20,7 @@
 #define DEBUG 1
 
 // BLUETOOTH
+BLEDfu bledfu;
 BLEUart bleuart;
 uint8_t zephirusClient = BLE_CONN_HANDLE_INVALID;
 #define BLE_BUF_SIZE 32 // more than we need, for now
@@ -168,11 +169,13 @@ void teardown(void) {
 
 void ble_init(void) {
   Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
+  Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
   Bluefruit.begin();
   Bluefruit.setTxPower(8);    // Check bluefruit.h for supported values
   Bluefruit.setName("ZEPHIRuS-SAMPLER");
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
+  bledfu.begin();
   bleuart.begin();
   startAdv();
 }
@@ -182,7 +185,7 @@ void startAdv(void) {
   Bluefruit.Advertising.addTxPower();
   Bluefruit.Advertising.addService(bleuart);
   Bluefruit.ScanResponse.addName();
-  Bluefruit.Advertising.restartOnDisconnect(false);
+  Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.setInterval(32, 244);
   Bluefruit.Advertising.setFastTimeout(30);
   Bluefruit.Advertising.start(0);
@@ -251,7 +254,6 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   Serial.print("Disconnected, reason = 0x");
   Serial.println(reason, HEX);
 #endif
-  if (reason == BLE_HCI_CONNECTION_TIMEOUT) { Bluefruit.Advertising.start(0); }
 }
 
 void relay_init(void) {
