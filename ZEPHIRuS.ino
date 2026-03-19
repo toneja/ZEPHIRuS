@@ -145,11 +145,7 @@ void led_complete(void) {
 }
 
 void sensor_init(void) {
-  // 3V3_S
-  pinMode(WB_IO2, OUTPUT);
-  digitalWrite(WB_IO2, LOW);
   delay(1000);
-  digitalWrite(WB_IO2, HIGH);
   // I2C
   Wire.begin();
 }
@@ -161,7 +157,6 @@ void teardown(void) {
   g_myGNSS.end();
   SD.end();
   Wire.end();
-  digitalWrite(WB_IO2, LOW);
 #if DEBUG
   Serial.end();
 #endif
