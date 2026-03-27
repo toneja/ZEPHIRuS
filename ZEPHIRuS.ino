@@ -47,6 +47,7 @@ SFE_UBLOX_GNSS g_myGNSS;
 char timestamp[19];
 long latitude;
 long longitude;
+long altitude;
 
 // TEMPERATURE
 Adafruit_BME680 bme;
@@ -79,25 +80,31 @@ void setup() {
 }
 
 void loop() {
-  // Timestamp
-  gps_gettime();
-  if (bleuart.available() && ble_get()) {
+  if (bleuart.available()) {
+    // Flash green LED while receiving BLEUart data
+    digitalWrite(LED_GREEN, HIGH);
+    // Timestamp
+    gps_gettime();
+    if (ble_get()) {
 #if DEBUG
-    Serial.println("*** SAMPLER ACTIVE ***");
+      Serial.println("*** SAMPLER ACTIVE ***");
 #endif
-    // RELAY - ENABLE FAN
-    relay_enable();
-    // GPS Coordinates at time of sampling
-    gps_get();
-    // Onboard temperature
-    bme680_get();
-    // Write to csv data file
-    log_data();
+      // RELAY - ENABLE FAN
+      relay_enable();
+      // GPS Coordinates at time of sampling
+      gps_get();
+      // Onboard temperature
+      bme680_get();
+      // Write to csv data file
+      log_data();
 #if DEBUG
-    Serial.println("Sampling Complete.");
+      Serial.println("Sampling Complete.");
 #endif
+    } else {
+      delay(200);
+    }
+    digitalWrite(LED_GREEN, LOW);
   }
-  delay(1000);
 }
 
 void led_init(void) {
@@ -112,16 +119,23 @@ void led_init(void) {
 }
 
 void led_error(void) {
+  digitalWrite(LED_GREEN, HIGH);
   while (1) {
-    digitalToggle(LED_GREEN);
-    delay(500);
-    digitalToggle(LED_BLUE);
-    delay(500);
+    digitalWrite(LED_BLUE, HIGH);
+    delay(333);
+    digitalWrite(LED_BLUE, LOW);
+    delay(333);
+    digitalWrite(LED_BLUE, HIGH);
+    delay(333);
+    digitalWrite(LED_BLUE, LOW);
+    delay(4000);
   }
 }
 
 void sensor_init(void) {
   // I2C
+  pinMode(WB_IO2, OUTPUT);
+  digitalWrite(WB_IO2, HIGH);
   delay(1000);
   Wire.begin();
   delay(1000); // give em a sec to wake up
@@ -130,7 +144,7 @@ void sensor_init(void) {
 void ble_init(void) {
   Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
   Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
-  Bluefruit.begin();
+  Bluefruit.begin(2, 0);
   Bluefruit.setTxPower(8);    // Check bluefruit.h for supported values
   Bluefruit.setName("ZEPHIRuS-SAMPLER");
   Bluefruit.Periph.setConnectCallback(connect_callback);
@@ -152,7 +166,6 @@ void startAdv(void) {
 }
 
 bool ble_get(void) {
-  digitalWrite(LED_GREEN, HIGH);
   int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
   buffer[len] = '\0';
   char *token;
@@ -175,7 +188,6 @@ bool ble_get(void) {
       (observed.windTemp >= targeted.windTemp)) {
     return true;
   }
-  digitalWrite(LED_GREEN, LOW);
   return false;
 }
 
@@ -221,7 +233,7 @@ void sd_init(void) {
     csvFile = SD.open("ZEPHIRuS.csv", FILE_WRITE);
     if (csvFile) { 
       if (csvFile.size() == 0) {
-        csvFile.println("Date,Time,Latitude,Longitude,WindSpeed,WindGust,WindTemp");
+        csvFile.println("Date,Time,Latitude,Longitude,Altitude,WindSpeed,WindGust,WindTemp");
         csvFile.flush();
       }
       return;
@@ -250,10 +262,10 @@ void gps_init(void) {
 #if DEBUG
     Serial.print("Searching for GPS...");
 #endif
-    while (g_myGNSS.getFixType() == 0) {
+    while (g_myGNSS.getFixType() < 3) {
       digitalToggle(LED_GREEN);
       digitalToggle(LED_BLUE);
-      delay(100);
+      delay(250);
 #if DEBUG
       Serial.print(".");
 #endif
@@ -267,12 +279,14 @@ void gps_init(void) {
 void gps_get(void) {
   latitude = g_myGNSS.getLatitude();
   longitude = g_myGNSS.getLongitude();
+  altitude = g_myGNSS.getAltitude();
 #if DEBUG
   Serial.print("Lat: ");
   Serial.print(latitude / 10000000.0, 7);
   Serial.print(" Long: ");
   Serial.print(longitude / 10000000.0, 7);
-  Serial.println(" degrees");
+  Serial.print(" degrees, Alt: ");
+  Serial.println(altitude);
 #endif
 }
 
@@ -312,6 +326,8 @@ void log_data(void) {
   csvFile.print(latitude / 10000000.0, 7);
   csvFile.print(",");
   csvFile.print(longitude / 10000000.0, 7);
+  csvFile.print(",");
+  csvFile.print(altitude / 1000);
   csvFile.print(",");
   csvFile.print(observed.windSpeed);
   csvFile.print(",");
