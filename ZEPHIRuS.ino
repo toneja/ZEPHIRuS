@@ -193,7 +193,6 @@ void connect_callback(uint16_t conn_handle) {
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
   char central_name[32] = { 0 };
   connection->getPeerName(central_name, sizeof(central_name));
-  Bluefruit.Advertising.stop();
 #if DEBUG
   Serial.print("Connected to ");
   Serial.println(central_name);
