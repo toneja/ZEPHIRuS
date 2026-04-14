@@ -15,6 +15,7 @@
 #include <SparkFun_u-blox_GNSS_Arduino_Library.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME680.h>
+#include <ArduinoJson.h>
 #include "SD.h"
 
 #define DEBUG 1
@@ -22,6 +23,7 @@
 // BLUETOOTH
 BLEDfu bledfu;
 BLEUart bleuart;
+char bleName[12] = "ZEPHIRuS-XX";
 #define BLE_BUF_SIZE 32 // more than we need, for now
 char buffer[BLE_BUF_SIZE];
 
@@ -34,10 +36,6 @@ struct EnvironmentData {
 };
 EnvironmentData observed;
 EnvironmentData targeted;
-// TARGETED VALUES; read this from a config file
-#define WIND_SPEED 3.00 // m/s
-#define WIND_GUST 3.00  // m/s
-#define WIND_TEMP 0.0   // *C
 
 // Log files
 File csvFile;
@@ -69,14 +67,12 @@ void setup() {
   gps_init();
   // SDCARD
   sd_init();
+  // CONFIG
+  load_config();
   // TEMPERATURE
   bme680_init();
   // BLUETOOTH
   ble_init();
-  // Target Values
-  targeted.windSpeed = WIND_SPEED;
-  targeted.windGust = WIND_GUST;
-  targeted.windTemp = WIND_TEMP;
 }
 
 void loop() {
@@ -144,7 +140,7 @@ void ble_init(void) {
   Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
   Bluefruit.begin(2, 0);
   Bluefruit.setTxPower(8);    // Check bluefruit.h for supported values
-  Bluefruit.setName("ZEPHIRuS-SAMPLER");
+  Bluefruit.setName(bleName);
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
   bledfu.begin();
@@ -244,6 +240,48 @@ void sd_init(void) {
 #endif
   }
   led_error();
+}
+
+void load_config(void) {
+  File zfile = SD.open("zconfig.txt");
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, zfile);
+  if (error) {
+#if DEBUG
+    Serial.println("ERROR: unable to read configuration file.");
+#endif
+    led_error();
+  }
+  if (!doc.containsKey("ZEPHIRuS")) {
+#if DEBUG
+    Serial.println("ERROR: config missing 'ZEPHIRuS'");
+#endif
+    led_error();
+  }
+  if (!doc.containsKey("windSpeed")) {
+#if DEBUG
+    Serial.println("ERROR: config missing 'windSpeed'");
+#endif
+    led_error();
+  }
+  if (!doc.containsKey("windGust")) {
+#if DEBUG
+    Serial.println("ERROR: config missing 'windGust'");
+#endif
+    led_error();
+  }
+  if (!doc.containsKey("windTemp")) {
+#if DEBUG
+    Serial.println("ERROR: config missing 'windTemp'");
+#endif
+    led_error();
+  }
+  const char* zeph = doc["ZEPHIRuS"];
+  bleName[9] = zeph[0];
+  bleName[10] = zeph[1];
+  targeted.windSpeed = doc["windSpeed"];
+  targeted.windGust = doc["windGust"];
+  targeted.windTemp = doc["windTemp"];
 }
 
 void gps_init(void) {
