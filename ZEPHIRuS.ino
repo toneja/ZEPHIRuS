@@ -108,7 +108,11 @@ void led_init(void) {
   }
 }
 
-void led_error(void) {
+void led_error(const char *errMsg) {
+#if DEBUG
+  Serial.print("ERROR: ");
+  Serial.println(errMsg);
+#endif
   digitalWrite(LED_GREEN, HIGH);
   while (1) {
     digitalWrite(LED_BLUE, HIGH);
@@ -227,7 +231,7 @@ void relay_handler(void){
 bool sampling_conditions(void) {
   return ((observed.windSpeed >= targeted.windSpeed) &&
           (observed.windGust >= targeted.windGust) &&
-            (observed.windTemp >= targeted.windTemp));
+          (observed.windTemp >= targeted.windTemp));
 }
 
 void sd_init(void) {
@@ -243,15 +247,10 @@ void sd_init(void) {
       }
       return;
     }
-#if DEBUG
-    Serial.println("ERROR: Unable to create CSV file.");
-#endif
+    led_error("Unable to create CSV file.");
   } else {
-#if DEBUG
-    Serial.println("ERROR: No SD Card found.\n");
-#endif
+    led_error("No SD Card found.");
   }
-  led_error();
 }
 
 void load_config(void) {
@@ -259,36 +258,11 @@ void load_config(void) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, zfile);
   zfile.close();
-  if (error) {
-#if DEBUG
-    Serial.println("ERROR: unable to read configuration file.");
-#endif
-    led_error();
-  }
-  if (!doc.containsKey("ZEPHIRuS")) {
-#if DEBUG
-    Serial.println("ERROR: config missing 'ZEPHIRuS'");
-#endif
-    led_error();
-  }
-  if (!doc.containsKey("windSpeed")) {
-#if DEBUG
-    Serial.println("ERROR: config missing 'windSpeed'");
-#endif
-    led_error();
-  }
-  if (!doc.containsKey("windGust")) {
-#if DEBUG
-    Serial.println("ERROR: config missing 'windGust'");
-#endif
-    led_error();
-  }
-  if (!doc.containsKey("windTemp")) {
-#if DEBUG
-    Serial.println("ERROR: config missing 'windTemp'");
-#endif
-    led_error();
-  }
+  if (error) { led_error("Unable to read configuration file."); }
+  if (!doc.containsKey("ZEPHIRuS"))  { led_error("Config missing 'ZEPHIRuS'"); }
+  if (!doc.containsKey("windSpeed")) { led_error("Config missing 'windSpeed'"); }
+  if (!doc.containsKey("windGust"))  { led_error("Config missing 'windGust'"); }
+  if (!doc.containsKey("windTemp"))  { led_error("Config missing 'windTemp'"); }
   const char* zeph = doc["ZEPHIRuS"];
   bleName[9] = zeph[0];
   bleName[10] = zeph[1];
@@ -299,10 +273,7 @@ void load_config(void) {
 
 void gps_init(void) {
   if (!g_myGNSS.begin()) {
-#if DEBUG
-    Serial.println("ERROR: GPS not found.");
-#endif
-    led_error();
+    led_error("GPS not found.");
   } else {
     g_myGNSS.setI2COutput(COM_TYPE_UBX);
     g_myGNSS.saveConfigSelective(VAL_CFG_SUBSEC_IOPORT);
@@ -345,10 +316,7 @@ void gps_get(void) {
 
 void bme680_init(void) {
   if (!bme.begin(0x76)) {
-#if DEBUG
-    Serial.println("ERROR: BME680 not found.");
-#endif
-    led_error();
+    led_error("BME680 not found.");
   }
   bme.setTemperatureOversampling(BME680_OS_8X);
   bme.setHumidityOversampling(BME680_OS_2X);
