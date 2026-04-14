@@ -50,6 +50,11 @@ long altitude;
 // TEMPERATURE
 Adafruit_BME680 bme;
 
+// RELAY: timer
+unsigned long startTime = 0;    // milliseconds
+uint16_t sampleLength = 0; // seconds
+bool samplerActive = false;
+
 void setup() {
 #if DEBUG
   // SERIAL
@@ -83,21 +88,12 @@ void loop() {
     gps_get();
     // Onboard temperature/humidity
     bme680_get();
-    if (ble_get()) {
-#if DEBUG
-      Serial.println("*** SAMPLER ACTIVE ***");
-#endif
-      // RELAY - ENABLE SAMPLER
-      relay_enable();
-      // Write to csv data file
-      log_data();
-#if DEBUG
-      Serial.println("Sampling Complete.");
-#endif
-    } else {
-      delay(200);
-    }
-    digitalWrite(LED_GREEN, LOW);
+    // Read BLEUart data
+    ble_get();
+    // Relay: handle sampler controller
+    relay_handler();
+    // LED off, when sampler inactive
+    if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
   }
 }
 
@@ -159,7 +155,7 @@ void startAdv(void) {
   Bluefruit.Advertising.start(0);
 }
 
-bool ble_get(void) {
+void ble_get(void) {
   int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
   buffer[len] = '\0';
   char *token;
@@ -177,12 +173,6 @@ bool ble_get(void) {
   Serial.print(", WindTemp: ");
   Serial.println(observed.windTemp);
 #endif
-  if ((observed.windSpeed >= targeted.windSpeed) &&
-      (observed.windGust >= targeted.windGust) &&
-      (observed.windTemp >= targeted.windTemp)) {
-    return true;
-  }
-  return false;
 }
 
 void connect_callback(uint16_t conn_handle) {
@@ -209,13 +199,35 @@ void relay_init(void) {
   digitalWrite(WB_IO4, LOW);
 }
 
-void relay_enable(void) {
+void relay_handler(void){
+  if (!samplerActive && sampling_conditions()) {
+    samplerActive = true;
+    startTime = millis();
+    // Relay ON
+    digitalWrite(WB_IO4, HIGH);
+    log_data();
 #if DEBUG
-  Serial.println("Waking Sampler...");
+    Serial.println("Sampler Active ... ");
 #endif
-  digitalWrite(WB_IO4, HIGH);
-  delay(5000);
-  digitalWrite(WB_IO4, LOW);
+  }
+  if (samplerActive && !sampling_conditions()) {
+    samplerActive = false;
+    // Relay OFF
+    digitalWrite(WB_IO4, LOW);
+    sampleLength = (millis() - startTime) / 1000;
+    log_data();
+#if DEBUG
+    Serial.print(" ... Sampling complete after ");
+    Serial.print(sampleLength);
+    Serial.println(" seconds.");
+#endif
+  }
+}
+
+bool sampling_conditions(void) {
+  return ((observed.windSpeed >= targeted.windSpeed) &&
+          (observed.windGust >= targeted.windGust) &&
+            (observed.windTemp >= targeted.windTemp));
 }
 
 void sd_init(void) {
@@ -226,7 +238,7 @@ void sd_init(void) {
     csvFile = SD.open("ZEPHIRuS.csv", FILE_WRITE);
     if (csvFile) { 
       if (csvFile.size() == 0) {
-        csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp");
+        csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp,Length");
         csvFile.flush();
       }
       return;
@@ -355,22 +367,27 @@ void bme680_get(void) {
 }
 
 void log_data(void) {
-  csvFile.print(timestamp);
-  csvFile.print(",");
-  csvFile.print(latitude / 10000000.0, 7);
-  csvFile.print(",");
-  csvFile.print(longitude / 10000000.0, 7);
-  csvFile.print(",");
-  csvFile.print(altitude / 1000);
-  csvFile.print(",");
-  csvFile.print(bme.temperature);
-  csvFile.print(",");
-  csvFile.print(bme.humidity);
-  csvFile.print(",");
-  csvFile.print(observed.windSpeed);
-  csvFile.print(",");
-  csvFile.print(observed.windGust);
-  csvFile.print(",");
-  csvFile.println(observed.windTemp);
+  if (samplerActive) {
+    csvFile.print(timestamp);
+    csvFile.print(",");
+    csvFile.print(latitude / 10000000.0, 7);
+    csvFile.print(",");
+    csvFile.print(longitude / 10000000.0, 7);
+    csvFile.print(",");
+    csvFile.print(altitude / 1000);
+    csvFile.print(",");
+    csvFile.print(bme.temperature);
+    csvFile.print(",");
+    csvFile.print(bme.humidity);
+    csvFile.print(",");
+    csvFile.print(observed.windSpeed);
+    csvFile.print(",");
+    csvFile.print(observed.windGust);
+    csvFile.print(",");
+    csvFile.print(observed.windTemp);
+  } else {
+    csvFile.print(",");
+    csvFile.println(sampleLength);
+  }
   csvFile.flush();
 }
