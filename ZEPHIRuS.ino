@@ -258,6 +258,7 @@ void load_config(void) {
   File zfile = SD.open("zconfig.txt");
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, zfile);
+  zfile.close();
   if (error) {
 #if DEBUG
     Serial.println("ERROR: unable to read configuration file.");
