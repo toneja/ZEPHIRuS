@@ -68,12 +68,12 @@ void setup() {
   sensor_init();
   // RELAY
   relay_init();
-  // GPS
-  gps_init();
   // SDCARD
   sd_init();
   // CONFIG
   load_config();
+  // GPS
+  gps_init();
   // TEMPERATURE
   bme680_init();
   // BLUETOOTH
