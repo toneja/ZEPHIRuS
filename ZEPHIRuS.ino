@@ -81,14 +81,14 @@ void loop() {
     digitalWrite(LED_GREEN, HIGH);
     // Timestamp + Coordinates
     gps_get();
+    // Onboard temperature/humidity
+    bme680_get();
     if (ble_get()) {
 #if DEBUG
       Serial.println("*** SAMPLER ACTIVE ***");
 #endif
       // RELAY - ENABLE SAMPLER
       relay_enable();
-      // Onboard temperature
-      bme680_get();
       // Write to csv data file
       log_data();
 #if DEBUG
@@ -226,7 +226,7 @@ void sd_init(void) {
     csvFile = SD.open("ZEPHIRuS.csv", FILE_WRITE);
     if (csvFile) { 
       if (csvFile.size() == 0) {
-        csvFile.println("Date,Time,Latitude,Longitude,Altitude,WindSpeed,WindGust,WindTemp");
+        csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp");
         csvFile.flush();
       }
       return;
@@ -333,11 +333,12 @@ void gps_get(void) {
 void bme680_init(void) {
   if (!bme.begin(0x76)) {
 #if DEBUG
-    Serial.println("WARNING: BME680 not found.");
+    Serial.println("ERROR: BME680 not found.");
 #endif
-    // led_error();
+    led_error();
   }
   bme.setTemperatureOversampling(BME680_OS_8X);
+  bme.setHumidityOversampling(BME680_OS_2X);
   // save power
   bme.setGasHeater(0, 0);
 }
@@ -361,6 +362,10 @@ void log_data(void) {
   csvFile.print(longitude / 10000000.0, 7);
   csvFile.print(",");
   csvFile.print(altitude / 1000);
+  csvFile.print(",");
+  csvFile.print(bme.temperature);
+  csvFile.print(",");
+  csvFile.print(bme.humidity);
   csvFile.print(",");
   csvFile.print(observed.windSpeed);
   csvFile.print(",");
