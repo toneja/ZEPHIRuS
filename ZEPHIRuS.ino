@@ -51,8 +51,8 @@ long altitude;
 Adafruit_BME680 bme;
 
 // RELAY: timer
-unsigned long startTime = 0;    // milliseconds
-uint16_t sampleLength = 0; // seconds
+unsigned long startTime = 0;  // milliseconds
+uint16_t sampleLength = 0;    // seconds
 bool samplerActive = false;
 
 void setup() {
@@ -109,10 +109,9 @@ void led_init(void) {
 }
 
 void led_error(const char *errMsg) {
-#if DEBUG
-  Serial.print("ERROR: ");
-  Serial.println(errMsg);
-#endif
+  // start BLE without connection LED
+  Bluefruit.autoConnLed(false);
+  ble_init();
   digitalWrite(LED_GREEN, HIGH);
   while (1) {
     digitalWrite(LED_BLUE, HIGH);
@@ -123,6 +122,11 @@ void led_error(const char *errMsg) {
     delay(333);
     digitalWrite(LED_BLUE, LOW);
     delay(4000);
+    if (bleuart.notifyEnabled()) { bleuart.print(errMsg); }
+#if DEBUG
+    Serial.print("ERROR: ");
+    Serial.println(errMsg);
+#endif
   }
 }
 
@@ -139,7 +143,7 @@ void ble_init(void) {
   Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
   Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
   Bluefruit.begin(2, 0);
-  Bluefruit.setTxPower(8);    // Check bluefruit.h for supported values
+  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
   Bluefruit.setName(bleName);
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
