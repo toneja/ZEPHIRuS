@@ -334,9 +334,9 @@ void bme680_get(void) {
 #if DEBUG
   Serial.print("Temperature = ");
   Serial.print(bme.temperature);
-  Serial.print(" *C, ");
-  Serial.print(bme.temperature * 1.8 + 32);
-  Serial.println(" *F");
+  Serial.print(" °C, Humidity = ");
+  Serial.print(bme.humidity);
+  Serial.println("%");
 #endif
 }
 
