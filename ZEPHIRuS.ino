@@ -259,10 +259,11 @@ void sd_init(void) {
 
 void load_config(void) {
   File zfile = SD.open("zconfig.txt");
+  if (!zfile) { led_error("Unable to read zconfig.txt."); }
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, zfile);
   zfile.close();
-  if (error) { led_error("Unable to read configuration file."); }
+  if (error) { led_error("Unable to read json configuration."); }
   if (!doc.containsKey("ZEPHIRuS"))  { led_error("Config missing 'ZEPHIRuS'"); }
   if (!doc.containsKey("windSpeed")) { led_error("Config missing 'windSpeed'"); }
   if (!doc.containsKey("windGust"))  { led_error("Config missing 'windGust'"); }
