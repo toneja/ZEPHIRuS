@@ -84,10 +84,6 @@ void loop() {
   if (bleuart.available()) {
     // Flash green LED while receiving BLEUart data
     digitalWrite(LED_GREEN, HIGH);
-    // Timestamp + Coordinates
-    gps_get();
-    // Onboard temperature/humidity
-    bme680_get();
     // Read BLEUart data
     ble_get();
     // Relay: handle sampler controller
@@ -213,6 +209,10 @@ void relay_handler(void){
     startTime = millis();
     // Relay ON
     digitalWrite(WB_IO4, HIGH);
+    // Timestamp + Coordinates
+    gps_get();
+    // Onboard temperature/humidity
+    bme680_get();
     log_data();
 #if DEBUG
     Serial.println("Sampler Active ... ");
