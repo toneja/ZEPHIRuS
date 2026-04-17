@@ -135,107 +135,9 @@ void sensor_init(void) {
   delay(1000); // give em a sec to wake up
 }
 
-void ble_init(void) {
-  Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
-  Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
-  Bluefruit.begin(2, 0);
-  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
-  Bluefruit.setName(bleName);
-  Bluefruit.Periph.setConnectCallback(connect_callback);
-  Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
-  bledfu.begin();
-  bleuart.begin();
-  startAdv();
-}
-
-void startAdv(void) {
-  Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
-  Bluefruit.Advertising.addTxPower();
-  Bluefruit.Advertising.addService(bleuart);
-  Bluefruit.ScanResponse.addName();
-  Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(32, 244);
-  Bluefruit.Advertising.setFastTimeout(30);
-  Bluefruit.Advertising.start(0);
-}
-
-void ble_get(void) {
-  int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
-  buffer[len] = '\0';
-  char *token;
-  token = strtok(buffer, ", ");
-  if (token) observed.windSpeed = atof(token);
-  token = strtok(NULL, ", ");
-  if (token) observed.windGust = atof(token);
-  token = strtok(NULL, ", ");
-  if (token) observed.windTemp = atof(token);
-#if DEBUG
-  Serial.print("WindSpeed: ");
-  Serial.print(observed.windSpeed);
-  Serial.print(", WindGust: ");
-  Serial.print(observed.windGust);
-  Serial.print(", WindTemp: ");
-  Serial.println(observed.windTemp);
-#endif
-}
-
-void connect_callback(uint16_t conn_handle) {
-  BLEConnection* connection = Bluefruit.Connection(conn_handle);
-  char central_name[32] = { 0 };
-  connection->getPeerName(central_name, sizeof(central_name));
-#if DEBUG
-  Serial.print("Connected to ");
-  Serial.println(central_name);
-#endif
-}
-
-void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
-  (void) conn_handle;
-  (void) reason;
-#if DEBUG
-  Serial.print("Disconnected, reason = 0x");
-  Serial.println(reason, HEX);
-#endif
-}
-
 void relay_init(void) {
   pinMode(WB_IO4, OUTPUT);
   digitalWrite(WB_IO4, LOW);
-}
-
-void relay_handler(void){
-  if (!samplerActive && sampling_conditions()) {
-    samplerActive = true;
-    startTime = millis();
-    // Relay ON
-    digitalWrite(WB_IO4, HIGH);
-    // Timestamp + Coordinates
-    gps_get();
-    // Onboard temperature/humidity
-    bme680_get();
-    log_data();
-#if DEBUG
-    Serial.println("Sampler Active ... ");
-#endif
-  }
-  if (samplerActive && !sampling_conditions()) {
-    samplerActive = false;
-    // Relay OFF
-    digitalWrite(WB_IO4, LOW);
-    sampleLength = (millis() - startTime) / 1000;
-    log_data();
-#if DEBUG
-    Serial.print(" ... Sampling complete after ");
-    Serial.print(sampleLength);
-    Serial.println(" seconds.");
-#endif
-  }
-}
-
-bool sampling_conditions(void) {
-  return ((observed.windSpeed >= targeted.windSpeed) &&
-          (observed.windGust >= targeted.windGust) &&
-          (observed.windTemp >= targeted.windTemp));
 }
 
 void sd_init(void) {
@@ -300,6 +202,114 @@ void gps_init(void) {
   }
 }
 
+void bme680_init(void) {
+  if (!bme.begin(0x76)) {
+    led_error("BME680 not found.");
+  }
+  bme.setTemperatureOversampling(BME680_OS_8X);
+  bme.setHumidityOversampling(BME680_OS_2X);
+  // save power
+  bme.setGasHeater(0, 0);
+}
+
+void ble_init(void) {
+  Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
+  Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
+  Bluefruit.begin(2, 0);
+  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
+  Bluefruit.setName(bleName);
+  Bluefruit.Periph.setConnectCallback(connect_callback);
+  Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
+  bledfu.begin();
+  bleuart.begin();
+  startAdv();
+}
+
+void startAdv(void) {
+  Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
+  Bluefruit.Advertising.addTxPower();
+  Bluefruit.Advertising.addService(bleuart);
+  Bluefruit.ScanResponse.addName();
+  Bluefruit.Advertising.restartOnDisconnect(true);
+  Bluefruit.Advertising.setInterval(32, 244);
+  Bluefruit.Advertising.setFastTimeout(30);
+  Bluefruit.Advertising.start(0);
+}
+
+void connect_callback(uint16_t conn_handle) {
+#if DEBUG
+  BLEConnection* connection = Bluefruit.Connection(conn_handle);
+  char central_name[32] = { 0 };
+  connection->getPeerName(central_name, sizeof(central_name));
+  Serial.print("Connected to ");
+  Serial.println(central_name);
+#endif
+}
+
+void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
+#if DEBUG
+  (void) conn_handle;
+  (void) reason;
+  Serial.print("Disconnected, reason = 0x");
+  Serial.println(reason, HEX);
+#endif
+}
+
+void ble_get(void) {
+  int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
+  buffer[len] = '\0';
+  char *token;
+  token = strtok(buffer, ", ");
+  if (token) observed.windSpeed = atof(token);
+  token = strtok(NULL, ", ");
+  if (token) observed.windGust = atof(token);
+  token = strtok(NULL, ", ");
+  if (token) observed.windTemp = atof(token);
+#if DEBUG
+  Serial.print("WindSpeed: ");
+  Serial.print(observed.windSpeed);
+  Serial.print(", WindGust: ");
+  Serial.print(observed.windGust);
+  Serial.print(", WindTemp: ");
+  Serial.println(observed.windTemp);
+#endif
+}
+
+void relay_handler(void){
+  if (!samplerActive && sampling_conditions()) {
+    samplerActive = true;
+    startTime = millis();
+    // Relay ON
+    digitalWrite(WB_IO4, HIGH);
+    // Timestamp + Coordinates
+    gps_get();
+    // Onboard temperature/humidity
+    bme680_get();
+    log_data();
+#if DEBUG
+    Serial.println("Sampler Active ... ");
+#endif
+  }
+  if (samplerActive && !sampling_conditions()) {
+    samplerActive = false;
+    // Relay OFF
+    digitalWrite(WB_IO4, LOW);
+    sampleLength = (millis() - startTime) / 1000;
+    log_data();
+#if DEBUG
+    Serial.print(" ... Sampling complete after ");
+    Serial.print(sampleLength);
+    Serial.println(" seconds.");
+#endif
+  }
+}
+
+bool sampling_conditions(void) {
+  return ((observed.windSpeed >= targeted.windSpeed) &&
+          (observed.windGust >= targeted.windGust) &&
+          (observed.windTemp >= targeted.windTemp));
+}
+
 void gps_get(void) {
   sprintf(timestamp,
           "%d-%02d-%02d,%02d:%02d:%02d",
@@ -317,16 +327,6 @@ void gps_get(void) {
   Serial.print(altitude / 1000);
   Serial.println(" m");
 #endif
-}
-
-void bme680_init(void) {
-  if (!bme.begin(0x76)) {
-    led_error("BME680 not found.");
-  }
-  bme.setTemperatureOversampling(BME680_OS_8X);
-  bme.setHumidityOversampling(BME680_OS_2X);
-  // save power
-  bme.setGasHeater(0, 0);
 }
 
 void bme680_get(void) {
