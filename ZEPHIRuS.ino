@@ -191,7 +191,7 @@ void gps_init(void) {
     while (g_myGNSS.getFixType() < 3) {
       digitalToggle(LED_GREEN);
       digitalToggle(LED_BLUE);
-      delay(250);
+      delay(500);
 #if DEBUG
       Serial.print(".");
 #endif
