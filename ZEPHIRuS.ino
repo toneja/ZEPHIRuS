@@ -36,6 +36,8 @@ struct EnvironmentData {
 };
 EnvironmentData observed;
 EnvironmentData targeted;
+float maxWindSpeed = 0;
+float maxWindGust = 0;
 
 // Log files
 File csvFile;
@@ -148,7 +150,7 @@ void sd_init(void) {
     csvFile = SD.open("ZEPHIRuS.csv", FILE_WRITE);
     if (csvFile) { 
       if (csvFile.size() == 0) {
-        csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp,Length");
+        csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp,MaxSpeed,MaxGust,Length");
         csvFile.flush();
       }
       return;
@@ -169,13 +171,11 @@ void load_config(void) {
   if (!doc.containsKey("ZEPHIRuS"))  { led_error("Config missing 'ZEPHIRuS'"); }
   if (!doc.containsKey("windSpeed")) { led_error("Config missing 'windSpeed'"); }
   if (!doc.containsKey("windGust"))  { led_error("Config missing 'windGust'"); }
-  if (!doc.containsKey("windTemp"))  { led_error("Config missing 'windTemp'"); }
   const char* zeph = doc["ZEPHIRuS"];
   bleName[9] = zeph[0];
   bleName[10] = zeph[1];
   targeted.windSpeed = doc["windSpeed"];
   targeted.windGust = doc["windGust"];
-  targeted.windTemp = doc["windTemp"];
 }
 
 void gps_init(void) {
@@ -276,6 +276,8 @@ void ble_get(void) {
 }
 
 void relay_handler(void){
+  if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
+  if (observed.windGust  > maxWindGust ) { maxWindGust  = observed.windGust;  }
   if (!samplerActive && sampling_conditions()) {
     samplerActive = true;
     startTime = millis();
@@ -300,14 +302,19 @@ void relay_handler(void){
     Serial.print(" ... Sampling complete after ");
     Serial.print(sampleLength);
     Serial.println(" seconds.");
+    Serial.print("Max wind speed: ");
+    Serial.print(maxWindSpeed);
+    Serial.print(" , Max wind gust: ");
+    Serial.println(maxWindGust);
 #endif
+    maxWindSpeed = 0;
+    maxWindGust = 0;
   }
 }
 
 bool sampling_conditions(void) {
   return ((observed.windSpeed >= targeted.windSpeed) &&
-          (observed.windGust >= targeted.windGust) &&
-          (observed.windTemp >= targeted.windTemp));
+          (observed.windGust  >= targeted.windGust));
 }
 
 void gps_get(void) {
@@ -360,6 +367,10 @@ void log_data(void) {
     csvFile.print(",");
     csvFile.print(observed.windTemp);
   } else {
+    csvFile.print(",");
+    csvFile.println(maxWindSpeed);
+    csvFile.print(",");
+    csvFile.println(maxWindGust);
     csvFile.print(",");
     csvFile.println(sampleLength);
   }
