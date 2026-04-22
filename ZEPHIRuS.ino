@@ -61,6 +61,7 @@ void setup() {
 #if DEBUG
   // SERIAL
   Serial.begin(115200);
+  delay(2000);
   // while (!Serial) { delay(100); }
   Serial.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
 #endif
@@ -191,11 +192,15 @@ void gps_init(void) {
     while (g_myGNSS.getFixType() < 3) {
       digitalToggle(LED_GREEN);
       digitalToggle(LED_BLUE);
-      delay(500);
+      delay(1000);
 #if DEBUG
       Serial.print(".");
 #endif
     }
+    // make sure LEDs are off
+    digitalWrite(LED_GREEN, LOW);
+    digitalWrite(LED_BLUE, LOW);
+    g_myGNSS.powerSaveMode();
 #if DEBUG
     Serial.println("GPS fix acquired.");
 #endif
@@ -368,9 +373,9 @@ void log_data(void) {
     csvFile.print(observed.windTemp);
   } else {
     csvFile.print(",");
-    csvFile.println(maxWindSpeed);
+    csvFile.print(maxWindSpeed);
     csvFile.print(",");
-    csvFile.println(maxWindGust);
+    csvFile.print(maxWindGust);
     csvFile.print(",");
     csvFile.println(sampleLength);
   }
