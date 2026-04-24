@@ -56,6 +56,8 @@ Adafruit_BME680 bme;
 unsigned long startTime = 0;  // milliseconds
 uint16_t sampleLength = 0;    // seconds
 bool samplerActive = false;
+uint8_t sampleCount = 0;
+uint8_t announceCount = 0;
 
 void setup() {
 #if DEBUG
@@ -93,6 +95,10 @@ void loop() {
     relay_handler();
     // LED off, when sampler inactive
     if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
+  }
+  if (bleuart.notifyEnabled() && announceCount == 0) {
+    bleuart.print("Samples collected: " + (String)sampleCount);
+    announceCount++;
   }
 }
 
@@ -252,6 +258,7 @@ void connect_callback(uint16_t conn_handle) {
 }
 
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
+  announceCount = 0;
 #if DEBUG
   (void) conn_handle;
   (void) reason;
@@ -293,6 +300,7 @@ void relay_handler(void){
     // Onboard temperature/humidity
     bme680_get();
     log_data();
+    sampleCount++;
 #if DEBUG
     Serial.println("Sampler Active ... ");
 #endif
@@ -311,9 +319,12 @@ void relay_handler(void){
     Serial.print(maxWindSpeed);
     Serial.print(" , Max wind gust: ");
     Serial.println(maxWindGust);
+    Serial.print("Sample count: ");
+    Serial.println(sampleCount);
 #endif
     maxWindSpeed = 0;
     maxWindGust = 0;
+    announceCount = 0;
   }
 }
 
