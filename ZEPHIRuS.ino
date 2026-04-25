@@ -1,14 +1,29 @@
-/******************************************************************
-* ZEPHIRuS: Zonal Epidemiology Plant Health Inoculum Risk Sampler *
-*                                                                 *
-* Expected hardware components:                                   *
-*   BASE:   RAK WIRELESS 19001                                    *
-*   CORE:   RAK WIRELESS 4631                                     *
-*   RELAY:  RAK WIRELESS 13007                                    *
-*   SDCARD: RAK WIRELESS 15002                                    *
-*   GPS:    RAK WIRELESS 12500                                    *
-*   TEMP:   RAK WIRELESS 1906                                     *
-******************************************************************/
+/************************************************************************
+* ZEPHIRuS: Zonal Epidemiology Plant Health Inoculum Risk Sampler       *
+*                                                                       *
+* Copyright (c) 2026 Jason Toney                                        *
+*                                                                       *
+* This program is free software: you can redistribute it and/or modify  *
+* it under the terms of the GNU General Public License as published by  *
+* the Free Software Foundation, either version 3 of the License, or     *
+* (at your option) any later version.                                   *
+*                                                                       *
+* This program is distributed in the hope that it will be useful,       *
+* but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+* GNU General Public License for more details.                          *
+*                                                                       *
+* You should have received a copy of the GNU General Public License     *
+* along with this program. If not, see <https://www.gnu.org/licenses/>. *
+*                                                                       *
+* Expected hardware components:                                         *
+*   BASE:   RAK WIRELESS 19001                                          *
+*   CORE:   RAK WIRELESS 4631                                           *
+*   RELAY:  RAK WIRELESS 13007                                          *
+*   SDCARD: RAK WIRELESS 15002                                          *
+*   GPS:    RAK WIRELESS 12500                                          *
+*   TEMP:   RAK WIRELESS 1906                                           *
+************************************************************************/
 
 #include <bluefruit.h>
 #include <Wire.h>
