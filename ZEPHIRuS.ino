@@ -209,6 +209,7 @@ void gps_init(void) {
     // Wait on the GPS fix for accurate timestamps
 #if DEBUG
     Serial.print("Searching for GPS...");
+    unsigned long startTime = millis();
 #endif
     while (g_myGNSS.getFixType() < 3) {
       digitalToggle(LED_GREEN);
@@ -223,7 +224,9 @@ void gps_init(void) {
     digitalWrite(LED_BLUE, LOW);
     g_myGNSS.powerSaveMode();
 #if DEBUG
-    Serial.println("GPS fix acquired.");
+    Serial.print("GPS fix acquired in ");
+    Serial.print((millis() - startTime) / 1000);
+    Serial.println(" seconds.");
 #endif
   }
 }
