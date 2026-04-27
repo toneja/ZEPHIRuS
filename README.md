@@ -59,7 +59,7 @@ Each record includes:
   - Wind temperature
   - Maximum wind speed during sampling event
   - Maximum wind gust during sampling event
-  - Length of the sampling event
+- Length of the sampling event
 
 **Note:**  
 The BME680 measures *onboard/internal conditions*, not the external environment being sampled. External conditions must be supplied via BLE.
