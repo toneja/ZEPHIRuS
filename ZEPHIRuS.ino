@@ -39,7 +39,7 @@
 BLEDfu bledfu;
 BLEUart bleuart;
 char bleName[12] = "ZEPHIRuS-XX";
-#define BLE_BUF_SIZE 32 // more than we need, for now
+#define BLE_BUF_SIZE 32  // more than we need, for now
 char buffer[BLE_BUF_SIZE];
 
 // BLEUart Sensor Data
@@ -131,7 +131,7 @@ void led_init(void) {
   }
 }
 
-void led_error(const char *errMsg) {
+void led_error(const char* errMsg) {
   // start BLE without connection LED
   Bluefruit.autoConnLed(false);
   ble_init();
@@ -159,7 +159,7 @@ void sensor_init(void) {
   digitalWrite(WB_IO2, HIGH);
   delay(1000);
   Wire.begin();
-  delay(1000); // give em a sec to wake up
+  delay(1000);  // give em a sec to wake up
 }
 
 void relay_init(void) {
@@ -173,7 +173,7 @@ void sd_init(void) {
     Serial.println("SD Card mounted.\n");
 #endif
     csvFile = SD.open("ZEPHIRuS.csv", FILE_WRITE);
-    if (csvFile) { 
+    if (csvFile) {
       if (csvFile.size() == 0) {
         csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp,MaxSpeed,MaxGust,Length");
         csvFile.flush();
@@ -193,9 +193,9 @@ void load_config(void) {
   DeserializationError error = deserializeJson(doc, zfile);
   zfile.close();
   if (error) { led_error("Unable to read json configuration."); }
-  if (!doc.containsKey("ZEPHIRuS"))  { led_error("Config missing 'ZEPHIRuS'"); }
+  if (!doc.containsKey("ZEPHIRuS")) { led_error("Config missing 'ZEPHIRuS'"); }
   if (!doc.containsKey("windSpeed")) { led_error("Config missing 'windSpeed'"); }
-  if (!doc.containsKey("windGust"))  { led_error("Config missing 'windGust'"); }
+  if (!doc.containsKey("windGust")) { led_error("Config missing 'windGust'"); }
   const char* zeph = doc["ZEPHIRuS"];
   bleName[9] = zeph[0];
   bleName[10] = zeph[1];
@@ -248,7 +248,7 @@ void ble_init(void) {
   Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
   Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
   Bluefruit.begin(1, 0);
-  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
+  Bluefruit.setTxPower(4);  // Check bluefruit.h for supported values
   Bluefruit.setName(bleName);
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
@@ -281,8 +281,8 @@ void connect_callback(uint16_t conn_handle) {
 
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
 #if DEBUG
-  (void) conn_handle;
-  (void) reason;
+  (void)conn_handle;
+  (void)reason;
   Serial.print("Disconnected, reason = 0x");
   Serial.println(reason, HEX);
 #endif
@@ -291,7 +291,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
 void ble_get(void) {
   int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
   buffer[len] = '\0';
-  char *token;
+  char* token;
   token = strtok(buffer, ", ");
   if (token) observed.windSpeed = atof(token);
   token = strtok(NULL, ", ");
@@ -308,9 +308,9 @@ void ble_get(void) {
 #endif
 }
 
-void relay_handler(void){
+void relay_handler(void) {
   if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
-  if (observed.windGust  > maxWindGust ) { maxWindGust  = observed.windGust;  }
+  if (observed.windGust > maxWindGust) { maxWindGust = observed.windGust; }
   if (!samplerActive && sampling_conditions()) {
     samplerActive = true;
     startTime = millis();
@@ -350,8 +350,7 @@ void relay_handler(void){
 }
 
 bool sampling_conditions(void) {
-  return ((observed.windSpeed >= targeted.windSpeed) &&
-          (observed.windGust  >= targeted.windGust));
+  return ((observed.windSpeed >= targeted.windSpeed) && (observed.windGust >= targeted.windGust));
 }
 
 void gps_get(void) {
