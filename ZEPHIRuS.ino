@@ -112,8 +112,11 @@ void loop() {
     if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
   }
   if (bleuart.notifyEnabled() && announceCount == 0) {
-    bleuart.print("Samples collected: " + (String)sampleCount);
+    bleuart.print((String)bleName + "," + (String)sampleCount);
     announceCount++;
+#if DEBUG
+    Serial.println("Notifying LEMS of sampling event counts...");
+#endif
   }
 }
 
@@ -244,7 +247,7 @@ void bme680_init(void) {
 void ble_init(void) {
   Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
   Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
-  Bluefruit.begin(2, 0);
+  Bluefruit.begin(1, 0);
   Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
   Bluefruit.setName(bleName);
   Bluefruit.Periph.setConnectCallback(connect_callback);
@@ -266,6 +269,7 @@ void startAdv(void) {
 }
 
 void connect_callback(uint16_t conn_handle) {
+  announceCount = 0;
 #if DEBUG
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
   char central_name[32] = { 0 };
@@ -276,7 +280,6 @@ void connect_callback(uint16_t conn_handle) {
 }
 
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
-  announceCount = 0;
 #if DEBUG
   (void) conn_handle;
   (void) reason;
