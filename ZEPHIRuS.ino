@@ -73,7 +73,7 @@ unsigned long startTime = 0;  // milliseconds
 uint16_t sampleLength = 0;    // seconds
 bool samplerActive = false;
 uint8_t sampleCount = 0;
-uint8_t announceCount = 0;
+bool announced = false;
 
 void setup() {
 #if DEBUG
@@ -112,9 +112,9 @@ void loop() {
     // LED off, when sampler inactive
     if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
   }
-  if (bleuart.notifyEnabled() && announceCount == 0) {
+  if (bleuart.notifyEnabled() && !announced) {
     bleuart.print((String)bleName + "," + (String)sampleCount);
-    announceCount++;
+    announced = true;
 #if DEBUG
     Serial.println("Notifying LEMS of sampling event counts...");
 #endif
@@ -274,7 +274,7 @@ void startAdv(void) {
 }
 
 void connect_callback(uint16_t conn_handle) {
-  announceCount = 0;
+  announced = false;
 #if DEBUG
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
   char central_name[32] = { 0 };
@@ -350,7 +350,7 @@ void relay_handler(void) {
 #endif
     maxWindSpeed = 0;
     maxWindGust = 0;
-    announceCount = 0;
+    announced = false;
   }
 }
 
