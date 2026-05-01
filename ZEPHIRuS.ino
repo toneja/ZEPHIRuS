@@ -36,6 +36,7 @@
 #define DEBUG 1
 
 // BLUETOOTH
+BLEDis bledis;
 BLEDfu bledfu;
 BLEUart bleuart;
 char bleName[12] = "ZEPHIRuS-XX";
@@ -252,6 +253,10 @@ void ble_init(void) {
   Bluefruit.setName(bleName);
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
+  // Device Info
+  bledis.setManufacturer("Mahaffee Lab");
+  bledis.setModel(bleName);
+  bledis.begin();
   bledfu.begin();
   bleuart.begin();
   startAdv();
