@@ -108,9 +108,7 @@ void loop() {
     // Read BLEUart data
     ble_get();
     // Relay: handle sampler controller
-    relay_handler();
-    // LED off, when sampler inactive
-    if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
+    relay_handler(false);
   }
   if (bleuart.notifyEnabled() && !announced) {
     bleuart.print((String)bleName + "," + (String)sampleCount);
@@ -119,6 +117,8 @@ void loop() {
     Serial.println("Notifying LEMS of sampling event counts...");
 #endif
   }
+  // LED off, when sampler inactive
+  if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
 }
 
 void led_init(void) {
@@ -291,6 +291,8 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   Serial.print("Disconnected, reason = 0x");
   Serial.println(reason, HEX);
 #endif
+  // Force sampler to shutdown if it is running
+  relay_handler(true);
 }
 
 void ble_get(void) {
@@ -313,7 +315,7 @@ void ble_get(void) {
 #endif
 }
 
-void relay_handler(void) {
+void relay_handler(bool override) {
   if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
   if (observed.windGust > maxWindGust) { maxWindGust = observed.windGust; }
   if (!samplerActive && sampling_conditions()) {
@@ -331,7 +333,7 @@ void relay_handler(void) {
     Serial.println("Sampler Active ... ");
 #endif
   }
-  if (samplerActive && !sampling_conditions()) {
+  if (samplerActive && (!sampling_conditions() || override)) {
     samplerActive = false;
     // Relay OFF
     digitalWrite(WB_IO4, LOW);
