@@ -102,23 +102,7 @@ void setup() {
 }
 
 void loop() {
-  if (bleuart.available()) {
-    // Flash green LED while receiving BLEUart data
-    digitalWrite(LED_GREEN, HIGH);
-    // Read BLEUart data
-    ble_get();
-    // Relay: handle sampler controller
-    relay_handler(false);
-  }
-  if (bleuart.notifyEnabled() && !announced) {
-    bleuart.print((String)bleName + "," + (String)sampleCount);
-    announced = true;
-#if DEBUG
-    Serial.println("Notifying LEMS of sampling event counts...");
-#endif
-  }
-  // LED off, when sampler inactive
-  if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
+  // all work is done in bluetooth callbacks
 }
 
 void led_init(void) {
@@ -253,6 +237,7 @@ void ble_init(void) {
   Bluefruit.setName(bleName);
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
+  bleuart.setRxCallback(bleuart_rx_callback);
   // Device Info
   bledis.setManufacturer("Mahaffee Lab");
   bledis.setModel(bleName);
@@ -295,7 +280,10 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   relay_handler(true);
 }
 
-void ble_get(void) {
+void bleuart_rx_callback(uint16_t conn_handle) {
+  // Flash green LED while receiving BLEUart data
+  digitalWrite(LED_GREEN, HIGH);
+  // Read BLEUart data
   int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
   buffer[len] = '\0';
   char* token;
@@ -305,6 +293,8 @@ void ble_get(void) {
   if (token) observed.windGust = atof(token);
   token = strtok(NULL, ", ");
   if (token) observed.windTemp = atof(token);
+  if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
+  if (observed.windGust > maxWindGust) { maxWindGust = observed.windGust; }
 #if DEBUG
   Serial.print("WindSpeed: ");
   Serial.print(observed.windSpeed);
@@ -313,11 +303,11 @@ void ble_get(void) {
   Serial.print(", WindTemp: ");
   Serial.println(observed.windTemp);
 #endif
+  // Relay: handle sampler controller
+  relay_handler(false);
 }
 
 void relay_handler(bool override) {
-  if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
-  if (observed.windGust > maxWindGust) { maxWindGust = observed.windGust; }
   if (!samplerActive && sampling_conditions()) {
     samplerActive = true;
     startTime = millis();
@@ -354,6 +344,15 @@ void relay_handler(bool override) {
     maxWindGust = 0;
     announced = false;
   }
+  if (bleuart.notifyEnabled() && !announced) {
+    bleuart.print((String)bleName + "," + (String)sampleCount);
+    announced = true;
+#if DEBUG
+    Serial.println("Notifying LEMS of sampling event counts...");
+#endif
+  }
+  // LED off, when sampler inactive
+  if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
 }
 
 bool sampling_conditions(void) {
