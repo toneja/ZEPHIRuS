@@ -30,6 +30,7 @@
 #include <SparkFun_u-blox_GNSS_Arduino_Library.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME680.h>
+#include <Adafruit_SleepyDog.h>
 #include <ArduinoJson.h>
 #include "SD.h"
 
@@ -96,9 +97,13 @@ void setup() {
   bme680_init();
   // BLUETOOTH
   ble_init();
+  // WATCHDOG
+  Watchdog.enable(10000);
 }
 
 void loop() {
+  Watchdog.reset();  // pet the watchdog
+  delay(5000);
   // all work is done in bluetooth callbacks
 }
 
