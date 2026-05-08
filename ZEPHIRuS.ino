@@ -78,10 +78,7 @@ bool announced = false;
 void setup() {
 #if DEBUG
   // SERIAL
-  Serial.begin(115200);
-  delay(2000);
-  // while (!Serial) { delay(100); }
-  Serial.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
+  serial_init();
 #endif
   // LEDs
   led_init();
@@ -104,6 +101,15 @@ void setup() {
 void loop() {
   // all work is done in bluetooth callbacks
 }
+
+#if DEBUG
+void serial_init(void) {
+  Serial.begin(115200);
+  delay(2000);
+  // while (!Serial) { delay(100); }
+  Serial.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
+}
+#endif
 
 void led_init(void) {
   pinMode(LED_GREEN, OUTPUT);
