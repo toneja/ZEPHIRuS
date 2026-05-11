@@ -42,7 +42,7 @@ BLEDfu bledfu;
 BLEUart bleuart;
 char bleName[12] = "ZEPHIRuS-XX";
 #define BLE_BUF_SIZE 32  // more than we need, for now
-char buffer[BLE_BUF_SIZE];
+char bleMsg[BLE_BUF_SIZE];
 
 // BLEUart Sensor Data
 struct EnvironmentData {
@@ -51,8 +51,8 @@ struct EnvironmentData {
   float windTemp;
   // float leafWetness;
 };
-EnvironmentData observed;
-EnvironmentData targeted;
+EnvironmentData observed = {};
+EnvironmentData targeted = {};
 float maxWindSpeed = 0;
 float maxWindGust = 0;
 
@@ -70,11 +70,11 @@ long altitude;
 Adafruit_BME680 bme;
 
 // RELAY: timer
+bool samplerActive = false;
+bool announced = false;
 unsigned long startTime = 0;  // milliseconds
 uint16_t sampleLength = 0;    // seconds
-bool samplerActive = false;
-uint8_t sampleCount = 0;
-bool announced = false;
+uint16_t sampleCount = 0;
 
 void setup() {
 #if DEBUG
@@ -208,7 +208,7 @@ void gps_init(void) {
     // Wait on the GPS fix for accurate timestamps
 #if DEBUG
     Serial.print("Searching for GPS...");
-    unsigned long startTime = millis();
+    uint16_t fixTime = 0;
 #endif
     while (g_myGNSS.getFixType() < 3) {
       digitalToggle(LED_GREEN);
@@ -216,6 +216,7 @@ void gps_init(void) {
       delay(1000);
 #if DEBUG
       Serial.print(".");
+      fixTime++;
 #endif
     }
     // make sure LEDs are off
@@ -224,7 +225,7 @@ void gps_init(void) {
     g_myGNSS.powerSaveMode();
 #if DEBUG
     Serial.print("GPS fix acquired in ");
-    Serial.print((millis() - startTime) / 1000);
+    Serial.print(fixTime);
     Serial.println(" seconds.");
 #endif
   }
@@ -295,14 +296,14 @@ void bleuart_rx_callback(uint16_t conn_handle) {
   // Flash green LED while receiving BLEUart data
   digitalWrite(LED_GREEN, HIGH);
   // Read BLEUart data
-  int len = bleuart.readBytesUntil('\n', buffer, BLE_BUF_SIZE - 1);
-  buffer[len] = '\0';
+  int len = bleuart.readBytesUntil('\n', bleMsg, BLE_BUF_SIZE - 1);
+  bleMsg[len] = '\0';
   char* token;
-  token = strtok(buffer, ", ");
+  token = strtok(bleMsg, ",");
   if (token) observed.windSpeed = atof(token);
-  token = strtok(NULL, ", ");
+  token = strtok(NULL, ",");
   if (token) observed.windGust = atof(token);
-  token = strtok(NULL, ", ");
+  token = strtok(NULL, ",");
   if (token) observed.windTemp = atof(token);
   if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
   if (observed.windGust > maxWindGust) { maxWindGust = observed.windGust; }
@@ -356,7 +357,8 @@ void relay_handler(bool override) {
     announced = false;
   }
   if (bleuart.notifyEnabled() && !announced) {
-    bleuart.print((String)bleName + "," + (String)sampleCount);
+    snprintf(bleMsg, sizeof(bleMsg), "%s,%d", bleName, sampleCount);
+    bleuart.print(bleMsg);
     announced = true;
 #if DEBUG
     Serial.println("Notifying LEMS of sampling event counts...");
@@ -371,7 +373,8 @@ bool sampling_conditions(void) {
 }
 
 void gps_get(void) {
-  sprintf(timestamp,
+  snprintf(timestamp,
+          sizeof(timestamp),
           "%d-%02d-%02d,%02d:%02d:%02d",
           g_myGNSS.getYear(), g_myGNSS.getMonth(), g_myGNSS.getDay(),
           g_myGNSS.getHour(), g_myGNSS.getMinute(), g_myGNSS.getSecond());
