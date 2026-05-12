@@ -58,6 +58,7 @@ float maxWindGust = 0;
 
 // Log files
 File csvFile;
+File logFile;
 
 // GPS: position + timestamp
 SFE_UBLOX_GNSS g_myGNSS;
@@ -99,6 +100,10 @@ void setup() {
   ble_init();
   // WATCHDOG
   Watchdog.enable(10000);
+  // ALL CLEAR
+  logFile.println("BOOT SUCCESSFUL.");
+  logFile.flush();
+  logFile.close();
 }
 
 void loop() {
@@ -132,6 +137,11 @@ void led_error(const char* errMsg) {
   Bluefruit.autoConnLed(false);
   ble_init();
   digitalWrite(LED_GREEN, HIGH);
+  if (logFile) {
+    logFile.println(errMsg);
+    logFile.flush();
+    logFile.close();
+  }
   while (1) {
     digitalWrite(LED_BLUE, HIGH);
     delay(333);
@@ -174,9 +184,16 @@ void sd_init(void) {
         csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp,MaxSpeed,MaxGust,Length");
         csvFile.flush();
       }
-      return;
+    } else {
+      led_error("Unable to create CSV file.");
     }
-    led_error("Unable to create CSV file.");
+    logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
+    if (logFile) {
+      logFile.println("==========================================");
+      logFile.flush();
+    } else {
+      led_error("Unable to create LOG file.");
+    }
   } else {
     led_error("No SD Card found.");
   }
@@ -228,6 +245,10 @@ void gps_init(void) {
     Serial.print(fixTime);
     Serial.println(" seconds.");
 #endif
+    // log timestamp to boot log
+    gps_get();
+    logFile.println(timestamp);
+    logFile.flush();
   }
 }
 
