@@ -133,9 +133,6 @@ void led_init(void) {
 }
 
 void led_error(const char* errMsg) {
-  // start BLE without connection LED
-  Bluefruit.autoConnLed(false);
-  ble_init();
   digitalWrite(LED_GREEN, HIGH);
   if (logFile) {
     logFile.println(errMsg);
@@ -151,7 +148,6 @@ void led_error(const char* errMsg) {
     delay(333);
     digitalWrite(LED_BLUE, LOW);
     delay(4000);
-    if (bleuart.notifyEnabled()) { bleuart.print(errMsg); }
 #if DEBUG
     Serial.print("ERROR: ");
     Serial.println(errMsg);
