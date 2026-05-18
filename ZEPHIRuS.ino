@@ -38,10 +38,9 @@
 
 // BLUETOOTH
 BLEDis bledis;
-BLEDfu bledfu;
 BLEUart bleuart;
 char bleName[12] = "ZEPHIRuS-XX";
-#define BLE_BUF_SIZE 32  // more than we need, for now
+#define BLE_BUF_SIZE 20  // default BLEUart packet size
 char bleMsg[BLE_BUF_SIZE];
 
 // BLEUart Sensor Data
@@ -53,12 +52,15 @@ struct EnvironmentData {
 };
 EnvironmentData observed = {};
 EnvironmentData targeted = {};
+EnvironmentData pendingData = {};
+volatile bool newDataAvailable = false;
 float maxWindSpeed = 0;
 float maxWindGust = 0;
 
 // Log files
 File csvFile;
 File logFile;
+char msgBuf[128];
 
 // GPS: position + timestamp
 SFE_UBLOX_GNSS g_myGNSS;
@@ -72,10 +74,15 @@ Adafruit_BME680 bme;
 
 // RELAY: timer
 bool samplerActive = false;
-bool announced = false;
 unsigned long startTime = 0;  // milliseconds
 uint16_t sampleLength = 0;    // seconds
+#if DEBUG
 uint16_t sampleCount = 0;
+#endif
+
+// WATCHDOG: Non-blocking timer
+unsigned long lastWatchdogPet = 0;
+#define WATCHDOG_INTERVAL 5000
 
 void setup() {
 #if DEBUG
@@ -100,6 +107,7 @@ void setup() {
   ble_init();
   // WATCHDOG
   Watchdog.enable(10000);
+  lastWatchdogPet = millis();
   // ALL CLEAR
   logFile.println("BOOT SUCCESSFUL.");
   logFile.flush();
@@ -107,9 +115,42 @@ void setup() {
 }
 
 void loop() {
-  Watchdog.reset();  // pet the watchdog
-  delay(5000);
-  // all work is done in bluetooth callbacks
+  // Only pet watchdog if 5 seconds have elapsed
+  unsigned long now = millis();
+  if (now - lastWatchdogPet >= WATCHDOG_INTERVAL) {
+    Watchdog.reset();
+    lastWatchdogPet = now;
+  }
+  // Process new BLE data immediately
+  if (newDataAvailable) {
+    newDataAvailable = false;
+    // Make a copy to avoid strtok corruption issues
+    char msgCopy[BLE_BUF_SIZE];
+    strncpy(msgCopy, bleMsg, sizeof(msgCopy) - 1);
+    char* token;
+    token = strtok(msgCopy, ",");
+    if (token == NULL || strlen(token) <= 0) { return; }
+    pendingData.windSpeed = atof(token);
+    token = strtok(NULL, ",");
+    if (token == NULL || strlen(token) <= 0) { return; }
+    pendingData.windGust = atof(token);
+    token = strtok(NULL, ",");
+    if (token == NULL || strlen(token) <= 0) { return; }
+    pendingData.windTemp = atof(token);
+    observed = pendingData;
+    if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
+    if (observed.windGust > maxWindGust) { maxWindGust = observed.windGust; }
+#if DEBUG
+    Serial.print("WindSpeed: ");
+    Serial.print(observed.windSpeed);
+    Serial.print(", WindGust: ");
+    Serial.print(observed.windGust);
+    Serial.print(", WindTemp: ");
+    Serial.println(observed.windTemp);
+#endif
+    // Handle relay and perform all heavy I/O here (GPS, BME680, SD card)
+    relay_handler(false);
+  }
 }
 
 #if DEBUG
@@ -134,6 +175,7 @@ void led_init(void) {
 
 void led_error(const char* errMsg) {
   digitalWrite(LED_GREEN, HIGH);
+  if (csvFile) { csvFile.close(); }
   if (logFile) {
     logFile.println(errMsg);
     logFile.flush();
@@ -170,29 +212,19 @@ void relay_init(void) {
 }
 
 void sd_init(void) {
-  if (SD.begin()) {
+  if (!SD.begin()) { led_error("No SD Card found."); }
 #if DEBUG
-    Serial.println("SD Card mounted.\n");
+  Serial.println("SD Card mounted.\n");
 #endif
-    csvFile = SD.open("ZEPHIRuS.csv", FILE_WRITE);
-    if (csvFile) {
-      if (csvFile.size() == 0) {
-        csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp,MaxSpeed,MaxGust,Length");
-        csvFile.flush();
-      }
-    } else {
-      led_error("Unable to create CSV file.");
-    }
-    logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
-    if (logFile) {
-      logFile.println("==========================================");
-      logFile.flush();
-    } else {
-      led_error("Unable to create LOG file.");
-    }
-  } else {
-    led_error("No SD Card found.");
+  csvFile = SD.open("ZEPHIRuS.csv", FILE_WRITE);
+  if (!csvFile) { led_error("Unable to create CSV file."); }
+  if (csvFile.size() == 0) {
+    csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp,MaxSpeed,MaxGust,Length");
+    csvFile.flush();
   }
+  logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
+  if (!logFile) { led_error("Unable to create LOG file."); }
+  logFile.println("==========================================\nZEPHIRuS\n");
 }
 
 void load_config(void) {
@@ -206,52 +238,49 @@ void load_config(void) {
   if (!doc.containsKey("windSpeed")) { led_error("Config missing 'windSpeed'"); }
   if (!doc.containsKey("windGust")) { led_error("Config missing 'windGust'"); }
   const char* zeph = doc["ZEPHIRuS"];
-  bleName[9] = zeph[0];
-  bleName[10] = zeph[1];
+  if (strlen(zeph) == 2) {
+    bleName[9] = zeph[0];
+    bleName[10] = zeph[1];
+  }
   targeted.windSpeed = doc["windSpeed"];
   targeted.windGust = doc["windGust"];
 }
 
 void gps_init(void) {
-  if (!g_myGNSS.begin()) {
-    led_error("GPS not found.");
-  } else {
-    g_myGNSS.setI2COutput(COM_TYPE_UBX);
-    g_myGNSS.saveConfigSelective(VAL_CFG_SUBSEC_IOPORT);
-    // Wait on the GPS fix for accurate timestamps
+  if (!g_myGNSS.begin()) { led_error("GPS not found."); }
+  g_myGNSS.setI2COutput(COM_TYPE_UBX);
+  g_myGNSS.saveConfigSelective(VAL_CFG_SUBSEC_IOPORT);
+  // Wait on the GPS fix for accurate timestamps
 #if DEBUG
-    Serial.print("Searching for GPS...");
-    uint16_t fixTime = 0;
+  Serial.print("Searching for GPS...");
+  uint16_t fixTime = 0;
 #endif
-    while (g_myGNSS.getFixType() < 3) {
-      digitalToggle(LED_GREEN);
-      digitalToggle(LED_BLUE);
-      delay(1000);
+  while (g_myGNSS.getFixType() == 0) {
+    digitalToggle(LED_GREEN);
+    digitalToggle(LED_BLUE);
+    delay(1000);
 #if DEBUG
-      Serial.print(".");
-      fixTime++;
+    Serial.print(".");
+    fixTime++;
+    if (fixTime == 30) { break; }  // don't loop forever
 #endif
-    }
-    // make sure LEDs are off
-    digitalWrite(LED_GREEN, LOW);
-    digitalWrite(LED_BLUE, LOW);
-    g_myGNSS.powerSaveMode();
-#if DEBUG
-    Serial.print("GPS fix acquired in ");
-    Serial.print(fixTime);
-    Serial.println(" seconds.");
-#endif
-    // log timestamp to boot log
-    gps_get();
-    logFile.println(timestamp);
-    logFile.flush();
   }
+  // make sure LEDs are off
+  digitalWrite(LED_GREEN, LOW);
+  digitalWrite(LED_BLUE, LOW);
+#if DEBUG
+  Serial.print("GPS fix acquired in ");
+  Serial.print(fixTime);
+  Serial.println(" seconds.");
+#endif
+  // log timestamp to boot log
+  gps_get();
+  logFile.println(timestamp);
+  g_myGNSS.powerSaveMode();
 }
 
 void bme680_init(void) {
-  if (!bme.begin(0x76)) {
-    led_error("BME680 not found.");
-  }
+  if (!bme.begin(0x76)) { led_error("BME680 not found."); }
   bme.setTemperatureOversampling(BME680_OS_8X);
   bme.setHumidityOversampling(BME680_OS_2X);
   // save power
@@ -259,8 +288,6 @@ void bme680_init(void) {
 }
 
 void ble_init(void) {
-  Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
-  Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
   Bluefruit.begin(1, 0);
   Bluefruit.setTxPower(4);  // Check bluefruit.h for supported values
   Bluefruit.setName(bleName);
@@ -271,7 +298,6 @@ void ble_init(void) {
   bledis.setManufacturer("Mahaffee Lab");
   bledis.setModel(bleName);
   bledis.begin();
-  bledfu.begin();
   bleuart.begin();
   startAdv();
 }
@@ -288,7 +314,6 @@ void startAdv(void) {
 }
 
 void connect_callback(uint16_t conn_handle) {
-  announced = false;
 #if DEBUG
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
   char central_name[32] = { 0 };
@@ -305,39 +330,28 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   Serial.print("Disconnected, reason = 0x");
   Serial.println(reason, HEX);
 #endif
+  // Clear observed data
+  observed = {};
   // Force sampler to shutdown if it is running
   relay_handler(true);
 }
 
 void bleuart_rx_callback(uint16_t conn_handle) {
   // Flash green LED while receiving BLEUart data
-  digitalWrite(LED_GREEN, HIGH);
+  if (!samplerActive) { digitalWrite(LED_GREEN, HIGH); }
   // Read BLEUart data
   int len = bleuart.readBytesUntil('\n', bleMsg, BLE_BUF_SIZE - 1);
-  bleMsg[len] = '\0';
-  char* token;
-  token = strtok(bleMsg, ",");
-  if (token) observed.windSpeed = atof(token);
-  token = strtok(NULL, ",");
-  if (token) observed.windGust = atof(token);
-  token = strtok(NULL, ",");
-  if (token) observed.windTemp = atof(token);
-  if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
-  if (observed.windGust > maxWindGust) { maxWindGust = observed.windGust; }
-#if DEBUG
-  Serial.print("WindSpeed: ");
-  Serial.print(observed.windSpeed);
-  Serial.print(", WindGust: ");
-  Serial.print(observed.windGust);
-  Serial.print(", WindTemp: ");
-  Serial.println(observed.windTemp);
-#endif
-  // Relay: handle sampler controller
-  relay_handler(false);
+  if (len > 0) {
+    bleMsg[len] = '\0';
+    newDataAvailable = true;
+  }
+  if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
 }
 
 void relay_handler(bool override) {
   if (!samplerActive && sampling_conditions()) {
+    // LED on, when sampler active
+    digitalWrite(LED_GREEN, HIGH);
     samplerActive = true;
     startTime = millis();
     // Relay ON
@@ -347,8 +361,8 @@ void relay_handler(bool override) {
     // Onboard temperature/humidity
     bme680_get();
     log_data();
-    sampleCount++;
 #if DEBUG
+    sampleCount++;
     Serial.println("Sampler Active ... ");
 #endif
   }
@@ -371,18 +385,9 @@ void relay_handler(bool override) {
 #endif
     maxWindSpeed = 0;
     maxWindGust = 0;
-    announced = false;
+    // LED off, when sampler inactive
+    digitalWrite(LED_GREEN, LOW);
   }
-  if (bleuart.notifyEnabled() && !announced) {
-    snprintf(bleMsg, sizeof(bleMsg), "%s,%d", bleName, sampleCount);
-    bleuart.print(bleMsg);
-    announced = true;
-#if DEBUG
-    Serial.println("Notifying LEMS of sampling event counts...");
-#endif
-  }
-  // LED off, when sampler inactive
-  if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
 }
 
 bool sampling_conditions(void) {
@@ -391,10 +396,10 @@ bool sampling_conditions(void) {
 
 void gps_get(void) {
   snprintf(timestamp,
-          sizeof(timestamp),
-          "%d-%02d-%02d,%02d:%02d:%02d",
-          g_myGNSS.getYear(), g_myGNSS.getMonth(), g_myGNSS.getDay(),
-          g_myGNSS.getHour(), g_myGNSS.getMinute(), g_myGNSS.getSecond());
+           sizeof(timestamp),
+           "%d-%02d-%02d,%02d:%02d:%02d",
+           g_myGNSS.getYear(), g_myGNSS.getMonth(), g_myGNSS.getDay(),
+           g_myGNSS.getHour(), g_myGNSS.getMinute(), g_myGNSS.getSecond());
   latitude = g_myGNSS.getLatitude();
   longitude = g_myGNSS.getLongitude();
   altitude = g_myGNSS.getAltitude();
@@ -422,30 +427,26 @@ void bme680_get(void) {
 
 void log_data(void) {
   if (samplerActive) {
-    csvFile.print(timestamp);
-    csvFile.print(",");
-    csvFile.print(latitude / 10000000.0, 7);
-    csvFile.print(",");
-    csvFile.print(longitude / 10000000.0, 7);
-    csvFile.print(",");
-    csvFile.print(altitude / 1000);
-    csvFile.print(",");
-    csvFile.print(bme.temperature);
-    csvFile.print(",");
-    csvFile.print(bme.humidity);
-    csvFile.print(",");
-    csvFile.print(observed.windSpeed);
-    csvFile.print(",");
-    csvFile.print(observed.windGust);
-    csvFile.print(",");
-    csvFile.print(observed.windTemp);
+    snprintf(msgBuf,
+             sizeof(msgBuf),
+             "%s,%.7f,%.7f,%d,%.1f,%.1f,%.2f,%.2f,%.2f",
+             timestamp,
+             latitude / 10000000.0,
+             longitude / 10000000.0,
+             altitude / 1000,
+             bme.temperature,
+             bme.humidity,
+             observed.windSpeed,
+             observed.windGust,
+             observed.windTemp);
   } else {
-    csvFile.print(",");
-    csvFile.print(maxWindSpeed);
-    csvFile.print(",");
-    csvFile.print(maxWindGust);
-    csvFile.print(",");
-    csvFile.println(sampleLength);
+    snprintf(msgBuf,
+             sizeof(msgBuf),
+             ",%.2f,%.2f,%d\n",
+             maxWindSpeed,
+             maxWindGust,
+             sampleLength);
   }
+  csvFile.print(msgBuf);
   csvFile.flush();
 }
