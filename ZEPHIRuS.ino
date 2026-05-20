@@ -65,9 +65,8 @@ char msgBuf[128];
 // GPS: position + timestamp
 SFE_UBLOX_GNSS g_myGNSS;
 char timestamp[19];
-long latitude;
-long longitude;
-long altitude;
+char gpsLoc[55];
+unsigned long lastFix = 0;
 
 // TEMPERATURE
 Adafruit_BME680 bme;
@@ -111,16 +110,9 @@ void setup() {
   // ALL CLEAR
   logFile.println("BOOT SUCCESSFUL.");
   logFile.flush();
-  logFile.close();
 }
 
 void loop() {
-  // Only pet watchdog if 5 seconds have elapsed
-  unsigned long now = millis();
-  if (now - lastWatchdogPet >= WATCHDOG_INTERVAL) {
-    Watchdog.reset();
-    lastWatchdogPet = now;
-  }
   // Process new BLE data immediately
   if (newDataAvailable) {
     newDataAvailable = false;
@@ -151,6 +143,14 @@ void loop() {
     // Handle relay and perform all heavy I/O here (GPS, BME680, SD card)
     relay_handler(false);
   }
+  // Only pet watchdog if 5 seconds have elapsed
+  unsigned long now = millis();
+  if (now - lastWatchdogPet >= WATCHDOG_INTERVAL) {
+    Watchdog.reset();
+    lastWatchdogPet = now;
+  }
+  // Log GPS coordinates every 12 hours
+  if (now - lastFix >= 12 * 60 * 60 * 1000) { gps_get(); }
 }
 
 #if DEBUG
@@ -219,7 +219,7 @@ void sd_init(void) {
   csvFile = SD.open("ZEPHIRuS.csv", FILE_WRITE);
   if (!csvFile) { led_error("Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time,Latitude,Longitude,Altitude,Temperature,Humidity,WindSpeed,WindGust,WindTemp,MaxSpeed,MaxGust,Length");
+    csvFile.println("Date,Time,Temperature,Humidity,WindSpeed,WindGust,WindTemp,MaxSpeed,MaxGust,Length");
     csvFile.flush();
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
@@ -273,10 +273,8 @@ void gps_init(void) {
   Serial.print(fixTime);
   Serial.println(" seconds.");
 #endif
-  // log timestamp to boot log
+  // log timestamp + coordinates to boot log
   gps_get();
-  logFile.println(timestamp);
-  g_myGNSS.powerSaveMode();
 }
 
 void bme680_init(void) {
@@ -356,8 +354,6 @@ void relay_handler(bool override) {
     startTime = millis();
     // Relay ON
     digitalWrite(WB_IO4, HIGH);
-    // Timestamp + Coordinates
-    gps_get();
     // Onboard temperature/humidity
     bme680_get();
     log_data();
@@ -394,23 +390,29 @@ bool sampling_conditions(void) {
   return ((observed.windSpeed >= targeted.windSpeed) && (observed.windGust >= targeted.windGust));
 }
 
-void gps_get(void) {
+void gps_gettime(void) {
   snprintf(timestamp,
            sizeof(timestamp),
            "%d-%02d-%02d,%02d:%02d:%02d",
            g_myGNSS.getYear(), g_myGNSS.getMonth(), g_myGNSS.getDay(),
            g_myGNSS.getHour(), g_myGNSS.getMinute(), g_myGNSS.getSecond());
-  latitude = g_myGNSS.getLatitude();
-  longitude = g_myGNSS.getLongitude();
-  altitude = g_myGNSS.getAltitude();
+}
+
+void gps_get(void) {
+  gps_gettime();
+  lastFix = millis();
+  snprintf(gpsLoc,
+           sizeof(gpsLoc),
+           "Lat: %.7f Long: %.7f °, Alt: %d m",
+           g_myGNSS.getLatitude() / 10000000.0,
+           g_myGNSS.getLongitude() / 10000000.0,
+           g_myGNSS.getAltitude() / 1000);
+  g_myGNSS.powerSaveMode();
+  logFile.println(timestamp);
+  logFile.println(gpsLoc);
+  logFile.flush();
 #if DEBUG
-  Serial.print("Lat: ");
-  Serial.print(latitude / 10000000.0, 7);
-  Serial.print(" Long: ");
-  Serial.print(longitude / 10000000.0, 7);
-  Serial.print(" °, Alt: ");
-  Serial.print(altitude / 1000);
-  Serial.println(" m");
+  Serial.println(gpsLoc);
 #endif
 }
 
@@ -427,13 +429,11 @@ void bme680_get(void) {
 
 void log_data(void) {
   if (samplerActive) {
+    gps_gettime();
     snprintf(msgBuf,
              sizeof(msgBuf),
-             "%s,%.7f,%.7f,%d,%.1f,%.1f,%.2f,%.2f,%.2f",
+             "%s,%.1f,%.1f,%.2f,%.2f,%.2f",
              timestamp,
-             latitude / 10000000.0,
-             longitude / 10000000.0,
-             altitude / 1000,
              bme.temperature,
              bme.humidity,
              observed.windSpeed,
