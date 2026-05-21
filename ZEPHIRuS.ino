@@ -39,7 +39,8 @@
 // BLUETOOTH
 BLEDis bledis;
 BLEUart bleuart;
-char bleName[12] = "ZEPHIRuS-XX";
+char bleName[12];
+const char* zephName;
 #define BLE_BUF_SIZE 20  // default BLEUart packet size
 char bleMsg[BLE_BUF_SIZE];
 
@@ -96,8 +97,6 @@ void setup() {
   relay_init();
   // SDCARD
   sd_init();
-  // CONFIG
-  load_config();
   // GPS
   gps_init();
   // TEMPERATURE
@@ -216,7 +215,16 @@ void sd_init(void) {
 #if DEBUG
   Serial.println("SD Card mounted.\n");
 #endif
-  csvFile = SD.open("ZEPHIRuS.csv", FILE_WRITE);
+  // Load configuration
+  load_config();
+  char csvFilename[12 + 1];
+  for (uint8_t i = 0; i <= 99; i++) {
+    snprintf(csvFilename, sizeof(csvFilename), "ZEPH%s%02d.csv", zephName, i);
+    if (!SD.exists(csvFilename)) {
+      break;
+    }
+  }
+  csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { led_error("Unable to create CSV file."); }
   if (csvFile.size() == 0) {
     csvFile.println("Date,Time,Temperature,Humidity,WindSpeed,WindGust,WindTemp,MaxSpeed,MaxGust,Length");
@@ -234,14 +242,11 @@ void load_config(void) {
   DeserializationError error = deserializeJson(doc, zfile);
   zfile.close();
   if (error) { led_error("Unable to read json configuration."); }
-  if (!doc.containsKey("ZEPHIRuS")) { led_error("Config missing 'ZEPHIRuS'"); }
-  if (!doc.containsKey("windSpeed")) { led_error("Config missing 'windSpeed'"); }
-  if (!doc.containsKey("windGust")) { led_error("Config missing 'windGust'"); }
-  const char* zeph = doc["ZEPHIRuS"];
-  if (strlen(zeph) == 2) {
-    bleName[9] = zeph[0];
-    bleName[10] = zeph[1];
-  }
+  if ((!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) != 2)) { led_error("Config error: 'ZEPHIRuS'"); }
+  if (!doc.containsKey("windSpeed")) { led_error("Config error: 'windSpeed'"); }
+  if (!doc.containsKey("windGust")) { led_error("Config error: 'windGust'"); }
+  zephName = doc["ZEPHIRuS"];
+  snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephName);
   targeted.windSpeed = doc["windSpeed"];
   targeted.windGust = doc["windGust"];
 }
@@ -339,10 +344,6 @@ void bleuart_rx_callback(uint16_t conn_handle) {
   if (!samplerActive) { digitalWrite(LED_GREEN, HIGH); }
   // Read BLEUart data
   uint8_t len = bleuart.available();
-#if DEBUG
-  Serial.print("BLEUart data packet length: ");
-  Serial.println(len);
-#endif
   if (len < 0) { return; }
   memset(bleMsg, 0, BLE_BUF_SIZE);  // clear the msg buffer
   uint8_t i = 0;
