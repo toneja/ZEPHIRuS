@@ -64,7 +64,7 @@ char msgBuf[128];
 
 // GPS: position + timestamp
 SFE_UBLOX_GNSS g_myGNSS;
-char timestamp[19];
+char timestamp[20];
 char gpsLoc[55];
 unsigned long lastFix = 0;
 
@@ -338,11 +338,17 @@ void bleuart_rx_callback(uint16_t conn_handle) {
   // Flash green LED while receiving BLEUart data
   if (!samplerActive) { digitalWrite(LED_GREEN, HIGH); }
   // Read BLEUart data
-  int len = bleuart.readBytesUntil('\n', bleMsg, BLE_BUF_SIZE - 1);
-  if (len > 0) {
-    bleMsg[len] = '\0';
-    newDataAvailable = true;
-  }
+  uint8_t len = bleuart.available();
+#if DEBUG
+  Serial.print("BLEUart data packet length: ");
+  Serial.println(len);
+#endif
+  if (len < 0) { return; }
+  memset(bleMsg, 0, BLE_BUF_SIZE);  // clear the msg buffer
+  uint8_t i = 0;
+  while (bleuart.available()) { bleMsg[i++] = bleuart.read(); }
+  bleMsg[len] = '\0';
+  newDataAvailable = true;
   if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
 }
 
@@ -412,6 +418,7 @@ void gps_get(void) {
   logFile.println(gpsLoc);
   logFile.flush();
 #if DEBUG
+  Serial.println(timestamp);
   Serial.println(gpsLoc);
 #endif
 }
