@@ -47,7 +47,6 @@ char bleMsg[BLE_BUF_SIZE];
 // BLEUart Sensor Data
 struct EnvironmentData {
   float windSpeed;
-  float windGust;
   float windTemp;
   // float leafWetness;
 };
@@ -56,7 +55,6 @@ EnvironmentData targeted = {};
 EnvironmentData pendingData = {};
 volatile bool newDataAvailable = false;
 float maxWindSpeed = 0;
-float maxWindGust = 0;
 
 // Log files
 File csvFile;
@@ -124,18 +122,12 @@ void loop() {
     pendingData.windSpeed = atof(token);
     token = strtok(NULL, ",");
     if (token == NULL || strlen(token) <= 0) { return; }
-    pendingData.windGust = atof(token);
-    token = strtok(NULL, ",");
-    if (token == NULL || strlen(token) <= 0) { return; }
     pendingData.windTemp = atof(token);
     observed = pendingData;
     if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
-    if (observed.windGust > maxWindGust) { maxWindGust = observed.windGust; }
 #if DEBUG
     Serial.print("WindSpeed: ");
     Serial.print(observed.windSpeed);
-    Serial.print(", WindGust: ");
-    Serial.print(observed.windGust);
     Serial.print(", WindTemp: ");
     Serial.println(observed.windTemp);
 #endif
@@ -227,7 +219,7 @@ void sd_init(void) {
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { led_error("Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time,Temperature,Humidity,WindSpeed,WindGust,WindTemp,MaxSpeed,MaxGust,Length");
+    csvFile.println("Date,Time,Temperature,Humidity,WindSpeed,WindTemp,MaxSpeed,Length");
     csvFile.flush();
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
@@ -244,11 +236,9 @@ void load_config(void) {
   if (error) { led_error("Unable to read json configuration."); }
   if ((!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) != 2)) { led_error("Config error: 'ZEPHIRuS'"); }
   if (!doc.containsKey("windSpeed")) { led_error("Config error: 'windSpeed'"); }
-  if (!doc.containsKey("windGust")) { led_error("Config error: 'windGust'"); }
   zephName = doc["ZEPHIRuS"];
   snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephName);
   targeted.windSpeed = doc["windSpeed"];
-  targeted.windGust = doc["windGust"];
 }
 
 void gps_init(void) {
@@ -380,21 +370,18 @@ void relay_handler(bool override) {
     Serial.print(sampleLength);
     Serial.println(" seconds.");
     Serial.print("Max wind speed: ");
-    Serial.print(maxWindSpeed);
-    Serial.print(" , Max wind gust: ");
-    Serial.println(maxWindGust);
+    Serial.println(maxWindSpeed);
     Serial.print("Sample count: ");
     Serial.println(sampleCount);
 #endif
     maxWindSpeed = 0;
-    maxWindGust = 0;
     // LED off, when sampler inactive
     digitalWrite(LED_GREEN, LOW);
   }
 }
 
 bool sampling_conditions(void) {
-  return ((observed.windSpeed >= targeted.windSpeed) && (observed.windGust >= targeted.windGust));
+  return observed.windSpeed >= targeted.windSpeed;
 }
 
 void gps_gettime(void) {
@@ -440,19 +427,17 @@ void log_data(void) {
     gps_gettime();
     snprintf(msgBuf,
              sizeof(msgBuf),
-             "%s,%.1f,%.1f,%.2f,%.2f,%.2f",
+             "%s,%.1f,%.1f,%.2f,%.2f",
              timestamp,
              bme.temperature,
              bme.humidity,
              observed.windSpeed,
-             observed.windGust,
              observed.windTemp);
   } else {
     snprintf(msgBuf,
              sizeof(msgBuf),
-             ",%.2f,%.2f,%d\n",
+             ",%.2f,%d\n",
              maxWindSpeed,
-             maxWindGust,
              sampleLength);
   }
   csvFile.print(msgBuf);

@@ -25,8 +25,7 @@ Example:
 ```
 {
 "ZEPHIRuS": "A1",
-"windSpeed": "3.00",
-"windGust": "3.00"
+"windSpeed": "3.00"
 }
 ```
 
@@ -53,10 +52,8 @@ Each record includes:
   - Humidity
 - External environmental data (BLE input)
   - Wind speed
-  - Wind gust
   - Wind temperature
   - Maximum wind speed during sampling event
-  - Maximum wind gust during sampling event
 - Length of the sampling event
 
 **Note:**  
