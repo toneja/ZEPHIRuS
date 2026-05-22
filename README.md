@@ -32,7 +32,6 @@ Example:
 
 ## BLE Interface
 - **Device Name:** Configurable via `zconfig.txt` (e.g., `ZEPHIRuS-A1`)
-- **Fallback Name:** `ZEPHIRuS-XX` (indicates configuration or hardware failure)
 - **Service:** BLE UART (Nordic UART Service via Bluefruit)
 
 ## BLE Input
@@ -42,14 +41,13 @@ You can connect using standard BLE debugging tools such as:
 - nRF Connect
 - Bluefruit Connect
 
-These apps allow real-time monitoring and manual data injection over BLE UART.
+These apps allow manual data injection over BLE UART.
 
 ## Output
-Data are written to a CSV file on the SD card (`ZEPHIRuS.csv`).
+Data are written to a CSV file on the SD card (e.g., `ZEPHA100.csv`).
 
 Each record includes:
 - Timestamp (GPS-derived)
-- Latitude, Longitude, Altitude
 - Onboard environmental data (BME680)
   - Temperature
   - Humidity
