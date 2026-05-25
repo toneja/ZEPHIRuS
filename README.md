@@ -4,7 +4,6 @@
 ZEPHIRuS (Zonal Epidemiology Plant Health Inoculum Risk Sampler) is a BLE-enabled environmental data logger and sampler controller built on RAK Wireless hardware. It aggregates:
 
 - External environmental data received over BLE (e.g., wind conditions)
-- Onboard sensor data (temperature, humidity via BME680)
 - GPS position and timestamp
 
 A relay-driven air sampling mechanism is activated during user-defined environmental conditions while all data are logged to a CSV file on an SD card.
@@ -15,7 +14,6 @@ A relay-driven air sampling mechanism is activated during user-defined environme
 - RAK13007 Relay Module
 - RAK15002 SD Card Module
 - RAK12500 GNSS (GPS) Module
-- RAK1906 BME680 Environmental Sensor
 
 ## Configuration
 Configuration is loaded from a `zconfig.txt` file on the SD card at startup.
@@ -47,16 +45,10 @@ Data are written to a CSV file on the SD card (e.g., `ZEPHA100.csv`).
 
 Each record includes:
 - Timestamp (GPS-derived)
-- Onboard environmental data (BME680)
-  - Temperature
-  - Humidity
 - External environmental data (BLE input)
   - Wind speed
   - Wind temperature
   - Maximum wind speed during sampling event
 - Length of the sampling event
-
-**Note:**  
-The BME680 measures *onboard/internal conditions*, not the external environment being sampled. External conditions must be supplied via BLE.
 
 ---

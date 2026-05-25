@@ -22,14 +22,11 @@
 *   RELAY:  RAK WIRELESS 13007                                          *
 *   SDCARD: RAK WIRELESS 15002                                          *
 *   GPS:    RAK WIRELESS 12500                                          *
-*   TEMP:   RAK WIRELESS 1906                                           *
 ************************************************************************/
 
 #include <bluefruit.h>
 #include <Wire.h>
 #include <SparkFun_u-blox_GNSS_Arduino_Library.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME680.h>
 #include <Adafruit_SleepyDog.h>
 #include <ArduinoJson.h>
 #include "SD.h"
@@ -67,9 +64,6 @@ char timestamp[20];
 char gpsLoc[55];
 unsigned long lastFix = 0;
 
-// TEMPERATURE
-Adafruit_BME680 bme;
-
 // RELAY: timer
 bool samplerActive = false;
 unsigned long startTime = 0;  // milliseconds
@@ -97,8 +91,6 @@ void setup() {
   sd_init();
   // GPS
   gps_init();
-  // TEMPERATURE
-  bme680_init();
   // BLUETOOTH
   ble_init();
   // WATCHDOG
@@ -131,7 +123,7 @@ void loop() {
     Serial.print(", WindTemp: ");
     Serial.println(observed.windTemp);
 #endif
-    // Handle relay and perform all heavy I/O here (GPS, BME680, SD card)
+    // Handle relay and perform all I/O here
     relay_handler(false);
   }
   // Only pet watchdog if 5 seconds have elapsed
@@ -219,7 +211,7 @@ void sd_init(void) {
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { led_error("Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time,Temperature,Humidity,WindSpeed,WindTemp,MaxSpeed,Length");
+    csvFile.println("Date,Time,WindSpeed,WindTemp,MaxSpeed,Length");
     csvFile.flush();
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
@@ -270,14 +262,6 @@ void gps_init(void) {
 #endif
   // log timestamp + coordinates to boot log
   gps_get();
-}
-
-void bme680_init(void) {
-  if (!bme.begin(0x76)) { led_error("BME680 not found."); }
-  bme.setTemperatureOversampling(BME680_OS_8X);
-  bme.setHumidityOversampling(BME680_OS_2X);
-  // save power
-  bme.setGasHeater(0, 0);
 }
 
 void ble_init(void) {
@@ -351,8 +335,6 @@ void relay_handler(bool override) {
     startTime = millis();
     // Relay ON
     digitalWrite(WB_IO4, HIGH);
-    // Onboard temperature/humidity
-    bme680_get();
     log_data();
 #if DEBUG
     sampleCount++;
@@ -411,26 +393,13 @@ void gps_get(void) {
 #endif
 }
 
-void bme680_get(void) {
-  bme.performReading();
-#if DEBUG
-  Serial.print("Temperature = ");
-  Serial.print(bme.temperature);
-  Serial.print(" °C, Humidity = ");
-  Serial.print(bme.humidity);
-  Serial.println("%");
-#endif
-}
-
 void log_data(void) {
   if (samplerActive) {
     gps_gettime();
     snprintf(msgBuf,
              sizeof(msgBuf),
-             "%s,%.1f,%.1f,%.2f,%.2f",
+             "%s,%.2f,%.2f",
              timestamp,
-             bme.temperature,
-             bme.humidity,
              observed.windSpeed,
              observed.windTemp);
   } else {
