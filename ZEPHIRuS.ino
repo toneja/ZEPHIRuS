@@ -242,7 +242,7 @@ void gps_init(void) {
   Serial.print("Searching for GPS...");
   uint16_t fixTime = 0;
 #endif
-  while (g_myGNSS.getFixType() == 0) {
+  while (g_myGNSS.getFixType() < 3) {
     digitalToggle(LED_GREEN);
     digitalToggle(LED_BLUE);
     delay(1000);
@@ -262,6 +262,33 @@ void gps_init(void) {
 #endif
   // log timestamp + coordinates to boot log
   gps_get();
+}
+
+void gps_gettime(void) {
+  snprintf(timestamp,
+           sizeof(timestamp),
+           "%d-%02d-%02d,%02d:%02d:%02d",
+           g_myGNSS.getYear(), g_myGNSS.getMonth(), g_myGNSS.getDay(),
+           g_myGNSS.getHour(), g_myGNSS.getMinute(), g_myGNSS.getSecond());
+}
+
+void gps_get(void) {
+  gps_gettime();
+  lastFix = millis();
+  snprintf(gpsLoc,
+           sizeof(gpsLoc),
+           "Lat: %.7f Long: %.7f °, Alt: %d m",
+           g_myGNSS.getLatitude() / 10000000.0,
+           g_myGNSS.getLongitude() / 10000000.0,
+           g_myGNSS.getAltitude() / 1000);
+  g_myGNSS.powerSaveMode();
+  logFile.println(timestamp);
+  logFile.println(gpsLoc);
+  logFile.flush();
+#if DEBUG
+  Serial.println(timestamp);
+  Serial.println(gpsLoc);
+#endif
 }
 
 void ble_init(void) {
@@ -364,33 +391,6 @@ void relay_handler(bool override) {
 
 bool sampling_conditions(void) {
   return observed.windSpeed >= targeted.windSpeed;
-}
-
-void gps_gettime(void) {
-  snprintf(timestamp,
-           sizeof(timestamp),
-           "%d-%02d-%02d,%02d:%02d:%02d",
-           g_myGNSS.getYear(), g_myGNSS.getMonth(), g_myGNSS.getDay(),
-           g_myGNSS.getHour(), g_myGNSS.getMinute(), g_myGNSS.getSecond());
-}
-
-void gps_get(void) {
-  gps_gettime();
-  lastFix = millis();
-  snprintf(gpsLoc,
-           sizeof(gpsLoc),
-           "Lat: %.7f Long: %.7f °, Alt: %d m",
-           g_myGNSS.getLatitude() / 10000000.0,
-           g_myGNSS.getLongitude() / 10000000.0,
-           g_myGNSS.getAltitude() / 1000);
-  g_myGNSS.powerSaveMode();
-  logFile.println(timestamp);
-  logFile.println(gpsLoc);
-  logFile.flush();
-#if DEBUG
-  Serial.println(timestamp);
-  Serial.println(gpsLoc);
-#endif
 }
 
 void log_data(void) {
