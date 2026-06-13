@@ -148,7 +148,11 @@ void serial_init(void) {
 void led_init(void) {
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_BLUE, OUTPUT);
-  for (uint8_t i = 0; i < 20; i++) {
+  led_loop(10);
+}
+
+void led_loop(int count) {
+  for (uint8_t i = 0; i < count * 2; i++) {
     digitalToggle(LED_GREEN);
     delay(100);
     digitalToggle(LED_BLUE);
@@ -356,24 +360,24 @@ void bleuart_rx_callback(uint16_t conn_handle) {
 
 void relay_handler(bool override) {
   if (!samplerActive && sampling_conditions()) {
-    // LED on, when sampler active
-    digitalWrite(LED_GREEN, HIGH);
     samplerActive = true;
     startTime = millis();
-    // Relay ON
-    digitalWrite(WB_IO4, HIGH);
-    log_data();
 #if DEBUG
     sampleCount++;
     Serial.println("Sampler Active ... ");
+    // Loop LEDs
+    led_loop(5);
+#else
+    // Relay ON
+    digitalWrite(WB_IO4, HIGH);
 #endif
+    // LED on, when sampler active
+    digitalWrite(LED_GREEN, HIGH);
+    log_data();
   }
   if (samplerActive && (!sampling_conditions() || override)) {
     samplerActive = false;
-    // Relay OFF
-    digitalWrite(WB_IO4, LOW);
     sampleLength = (millis() - startTime) / 1000;
-    log_data();
 #if DEBUG
     Serial.print(" ... Sampling complete after ");
     Serial.print(sampleLength);
@@ -382,7 +386,13 @@ void relay_handler(bool override) {
     Serial.println(maxWindSpeed);
     Serial.print("Sample count: ");
     Serial.println(sampleCount);
+    // Loop LEDs
+    led_loop(5);
+#else
+    // Relay OFF
+    digitalWrite(WB_IO4, LOW);
 #endif
+    log_data();
     maxWindSpeed = 0;
     // LED off, when sampler inactive
     digitalWrite(LED_GREEN, LOW);
