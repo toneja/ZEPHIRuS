@@ -6,7 +6,7 @@ ZEPHIRuS (Zonal Epidemiology Plant Health Inoculum Risk Sampler) is a BLE-enable
 - External environmental data received over BLE (e.g., wind conditions)
 - GPS position and timestamp
 
-A relay-driven air sampling mechanism is activated during user-defined environmental conditions while all data are logged to a CSV file on an SD card.
+A relay-driven air sampling mechanism is activated during user-defined environmental conditions while all data are logged to CSV and TXT files on an SD card.
 
 ## Hardware Requirements
 - RAK19001 Base Board
@@ -41,9 +41,9 @@ You can connect using standard BLE debugging tools such as:
 These apps allow manual data injection over BLE UART.
 
 ## Output
-Data are written to a CSV file on the SD card (e.g., `ZEPHA100.csv`).
+Data are written to CSV and TXT files on the SD card (e.g., `ZEPHA1[00-99].csv` and `ZEPHIRuS.txt`).
 
-Each record includes:
+Each CSV record includes:
 - Timestamp (GPS-derived)
 - External environmental data (BLE input)
   - Wind speed
