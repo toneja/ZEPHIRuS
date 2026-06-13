@@ -337,7 +337,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   // Clear observed data
   observed = {};
   // Force sampler to shutdown if it is running
-  relay_handler(true);
+  if (samplerActive) { relay_handler(true); }
 }
 
 void bleuart_rx_callback(uint16_t conn_handle) {
