@@ -355,7 +355,10 @@ void bleuart_rx_callback(uint16_t conn_handle) {
   while (bleuart.available()) { bleMsg[i++] = bleuart.read(); }
   bleMsg[len] = '\0';
   newDataAvailable = true;
-  if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
+  if (!samplerActive) {
+    delay(50);
+    digitalWrite(LED_GREEN, LOW);
+  }
 }
 
 void relay_handler(bool override) {
