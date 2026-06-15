@@ -105,6 +105,8 @@ void loop() {
   // Process new BLE data immediately
   if (newDataAvailable) {
     newDataAvailable = false;
+    // Flash green LED while handling BLEUart data
+    digitalWrite(LED_GREEN, HIGH);
     // Make a copy to avoid strtok corruption issues
     char msgCopy[BLE_BUF_SIZE];
     strncpy(msgCopy, bleMsg, sizeof(msgCopy) - 1);
@@ -125,6 +127,11 @@ void loop() {
 #endif
     // Handle relay and perform all I/O here
     relay_handler(false);
+    // LED off, when sampler inactive
+    if (!samplerActive) {
+      delay(50);
+      digitalWrite(LED_GREEN, LOW);
+    }
   }
   // Only pet watchdog if 5 seconds have elapsed
   unsigned long now = millis();
@@ -345,8 +352,6 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
 }
 
 void bleuart_rx_callback(uint16_t conn_handle) {
-  // Flash green LED while receiving BLEUart data
-  if (!samplerActive) { digitalWrite(LED_GREEN, HIGH); }
   // Read BLEUart data
   uint8_t len = bleuart.available();
   if (len < 0) { return; }
@@ -355,10 +360,6 @@ void bleuart_rx_callback(uint16_t conn_handle) {
   while (bleuart.available()) { bleMsg[i++] = bleuart.read(); }
   bleMsg[len] = '\0';
   newDataAvailable = true;
-  if (!samplerActive) {
-    delay(50);
-    digitalWrite(LED_GREEN, LOW);
-  }
 }
 
 void relay_handler(bool override) {
@@ -374,8 +375,6 @@ void relay_handler(bool override) {
     // Relay ON
     digitalWrite(WB_IO4, HIGH);
 #endif
-    // LED on, when sampler active
-    digitalWrite(LED_GREEN, HIGH);
     log_data();
   }
   if (samplerActive && (!sampling_conditions() || override)) {
@@ -397,8 +396,6 @@ void relay_handler(bool override) {
 #endif
     log_data();
     maxWindSpeed = 0;
-    // LED off, when sampler inactive
-    digitalWrite(LED_GREEN, LOW);
   }
 }
 
