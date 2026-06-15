@@ -32,6 +32,7 @@
 #include "SD.h"
 
 #define DEBUG 0
+#define VERSION 20260615  // Date last modified
 
 // BLUETOOTH
 BLEDis bledis;
@@ -77,12 +78,12 @@ unsigned long lastWatchdogPet = 0;
 #define WATCHDOG_INTERVAL 5000
 
 void setup() {
+  // LEDs
+  led_init();
 #if DEBUG
   // SERIAL
   serial_init();
 #endif
-  // LEDs
-  led_init();
   // I2C
   sensor_init();
   // RELAY
@@ -148,7 +149,7 @@ void serial_init(void) {
   Serial.begin(115200);
   delay(2000);
   // while (!Serial) { delay(100); }
-  Serial.println("ZEPHIRuS - PERIPHERAL: SAMPLER");
+  Serial.printf("ZEPHIRuS - SAMPLER VERSION %d\n", VERSION);
 }
 #endif
 
@@ -227,7 +228,7 @@ void sd_init(void) {
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
   if (!logFile) { led_error("Unable to create LOG file."); }
-  logFile.println("==========================================\nZEPHIRuS\n");
+  logFile.printf("==========================================\nZEPHIRuS VERSION %d\n\n", VERSION);
 }
 
 void load_config(void) {
