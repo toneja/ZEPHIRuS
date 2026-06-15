@@ -229,6 +229,7 @@ void sd_init(void) {
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
   if (!logFile) { led_error("Unable to create LOG file."); }
   logFile.printf("==========================================\nZEPHIRuS VERSION %d\n\n", VERSION);
+  logFile.flush();
 }
 
 void load_config(void) {
