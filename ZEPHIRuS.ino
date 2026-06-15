@@ -31,7 +31,7 @@
 #include <ArduinoJson.h>
 #include "SD.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 // BLUETOOTH
 BLEDis bledis;
