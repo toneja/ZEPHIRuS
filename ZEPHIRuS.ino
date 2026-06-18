@@ -32,7 +32,7 @@
 #include "SD.h"
 
 #define DEBUG 0
-#define VERSION 20260615  // Date last modified
+#define VERSION 20260618  // Date last modified
 
 // BLUETOOTH
 BLEDis bledis;
@@ -77,6 +77,14 @@ uint16_t sampleCount = 0;
 unsigned long lastWatchdogPet = 0;
 #define WATCHDOG_INTERVAL 5000
 
+// VBAT: monitor battery voltage
+#define MIN_VBAT 10.5
+#define MAX_COUNTS 4095.0  // 12-bits
+#define MAX_VINPUT 3.0
+#define DIVIDER_RATIO 5.0
+float voltMagic = MAX_COUNTS / MAX_VINPUT / DIVIDER_RATIO;
+float voltage;
+
 void setup() {
   // LEDs
   led_init();
@@ -84,6 +92,8 @@ void setup() {
   // SERIAL
   serial_init();
 #endif
+  // VBAT
+  vbat_init();
   // I2C
   sensor_init();
   // RELAY
@@ -192,6 +202,26 @@ void led_error(const char* errMsg) {
   }
 }
 
+void vbat_init(void) {
+  pinMode(WB_A1, INPUT);
+  analogReference(AR_INTERNAL_3_0);  // 3.0 Volts
+  analogReadResolution(12);          // 12-bit resolution
+  vbat_get();
+}
+
+void vbat_get(void) {
+  int rawValue = analogRead(WB_A1);
+  voltage = rawValue / voltMagic;
+#if DEBUG
+  Serial.printf("Raw vbat input: %d | Voltage: %.2f\n", rawValue, voltage);
+#else
+  // Don't draw the battery down below safe threshold
+  if (voltage <= MIN_VBAT) {
+    led_error("Battery voltage is too low to activate sampler mechanism.");
+  }
+#endif
+}
+
 void sensor_init(void) {
   // I2C
   pinMode(WB_IO2, OUTPUT);
@@ -228,7 +258,7 @@ void sd_init(void) {
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
   if (!logFile) { led_error("Unable to create LOG file."); }
-  logFile.printf("==========================================\nZEPHIRuS VERSION %d\n\n", VERSION);
+  logFile.printf("==========================================\nZEPHIRuS VERSION %d\n\nBattery voltage: %.2f\n", VERSION, voltage);
   logFile.flush();
 }
 
@@ -366,6 +396,8 @@ void bleuart_rx_callback(uint16_t conn_handle) {
 
 void relay_handler(bool override) {
   if (!samplerActive && sampling_conditions()) {
+    // Check battery level before activating sampler
+    vbat_get();
     samplerActive = true;
     startTime = millis();
 #if DEBUG
