@@ -32,7 +32,7 @@
 #include "SD.h"
 
 #define DEBUG 0
-#define VERSION 20260618  // Date last modified
+#define VERSION 20260620  // Date last modified
 
 // BLUETOOTH
 BLEDis bledis;
@@ -131,10 +131,7 @@ void loop() {
     observed = pendingData;
     if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
 #if DEBUG
-    Serial.print("WindSpeed: ");
-    Serial.print(observed.windSpeed);
-    Serial.print(", WindTemp: ");
-    Serial.println(observed.windTemp);
+    Serial.printf("WindSpeed: %.2f, WindTemp: %.2f\n", observed.windSpeed, observed.windTemp);
 #endif
     // Handle relay and perform all I/O here
     relay_handler(false);
@@ -196,8 +193,7 @@ void led_error(const char* errMsg) {
     digitalWrite(LED_BLUE, LOW);
     delay(4000);
 #if DEBUG
-    Serial.print("ERROR: ");
-    Serial.println(errMsg);
+    Serial.printf("ERROR: %s\n", errMsg);
 #endif
   }
 }
@@ -239,7 +235,7 @@ void relay_init(void) {
 void sd_init(void) {
   if (!SD.begin()) { led_error("No SD Card found."); }
 #if DEBUG
-  Serial.println("SD Card mounted.\n");
+  Serial.println("SD Card mounted.");
 #endif
   // Load configuration
   load_config();
@@ -299,9 +295,7 @@ void gps_init(void) {
   digitalWrite(LED_GREEN, LOW);
   digitalWrite(LED_BLUE, LOW);
 #if DEBUG
-  Serial.print("GPS fix acquired in ");
-  Serial.print(fixTime);
-  Serial.println(" seconds.");
+  Serial.printf("GPS fix acquired in %d seconds.\n", fixTime);
 #endif
   // log timestamp + coordinates to boot log
   gps_get();
@@ -325,12 +319,10 @@ void gps_get(void) {
            g_myGNSS.getLongitude() / 10000000.0,
            g_myGNSS.getAltitude() / 1000);
   g_myGNSS.powerSaveMode();
-  logFile.println(timestamp);
-  logFile.println(gpsLoc);
+  logFile.printf("%s\n%s\n", timestamp, gpsLoc);
   logFile.flush();
 #if DEBUG
-  Serial.println(timestamp);
-  Serial.println(gpsLoc);
+  Serial.printf("%s\n%s\n", timestamp, gpsLoc);
 #endif
 }
 
@@ -365,8 +357,7 @@ void connect_callback(uint16_t conn_handle) {
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
   char central_name[32] = { 0 };
   connection->getPeerName(central_name, sizeof(central_name));
-  Serial.print("Connected to ");
-  Serial.println(central_name);
+  Serial.printf("Connected to %s\n", central_name);
 #endif
 }
 
@@ -374,8 +365,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
 #if DEBUG
   (void)conn_handle;
   (void)reason;
-  Serial.print("Disconnected, reason = 0x");
-  Serial.println(reason, HEX);
+  Serial.printf("Disconnected, reason = %#X\n", reason);
 #endif
   // Clear observed data
   observed = {};
@@ -415,13 +405,9 @@ void relay_handler(bool override) {
     samplerActive = false;
     sampleLength = (millis() - startTime) / 1000;
 #if DEBUG
-    Serial.print(" ... Sampling complete after ");
-    Serial.print(sampleLength);
-    Serial.println(" seconds.");
-    Serial.print("Max wind speed: ");
-    Serial.println(maxWindSpeed);
-    Serial.print("Sample count: ");
-    Serial.println(sampleCount);
+    Serial.printf(" ... Sampling complete after %d seconds.\n", sampleLength);
+    Serial.printf("Max wind speed: %.2f\n", maxWindSpeed);
+    Serial.printf("Sample count: %d\n", sampleCount);
     // Loop LEDs
     led_loop(5);
 #else
