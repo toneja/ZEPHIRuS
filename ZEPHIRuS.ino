@@ -22,6 +22,7 @@
 *   RELAY:  RAK WIRELESS 13007                                          *
 *   SDCARD: RAK WIRELESS 15002                                          *
 *   GPS:    RAK WIRELESS 12500                                          *
+*   VBAT:   Generic 0-25V DC Voltage Sensor Module                      *
 ************************************************************************/
 
 #include <bluefruit.h>
@@ -32,7 +33,7 @@
 #include "SD.h"
 
 #define DEBUG 0
-#define VERSION 20260620  // Date last modified
+#define VERSION 20260623  // Date last modified
 
 // BLUETOOTH
 BLEDis bledis;
@@ -78,6 +79,7 @@ unsigned long lastWatchdogPet = 0;
 #define WATCHDOG_INTERVAL 5000
 
 // VBAT: monitor battery voltage
+#define ANALOG_PIN1 WB_A1  // AIN1 pin
 #define MIN_VBAT 10.5
 #define MAX_COUNTS 4095.0  // 12-bits
 #define MAX_VINPUT 3.0
@@ -116,6 +118,16 @@ void loop() {
   // Process new BLE data immediately
   if (newDataAvailable) {
     newDataAvailable = false;
+    // Check battery level before activating sampler
+    if (!vbat_get()) {
+#if DEBUG
+      Serial.printf("Battery voltage %.2f is too low to activate sampler mechanism.", voltage);
+#else
+      // Force sampler to shutdown if it is running
+      if (samplerActive) { relay_handler(true); }
+      return;
+#endif
+    }
     // Flash green LED while handling BLEUart data
     digitalWrite(LED_GREEN, HIGH);
     // Make a copy to avoid strtok corruption issues
@@ -199,23 +211,29 @@ void led_error(const char* errMsg) {
 }
 
 void vbat_init(void) {
-  pinMode(WB_A1, INPUT);
+  pinMode(ANALOG_PIN1, INPUT);
   analogReference(AR_INTERNAL_3_0);  // 3.0 Volts
   analogReadResolution(12);          // 12-bit resolution
-  vbat_get();
+  if (!vbat_get()) {
+#if DEBUG
+    Serial.printf("Battery voltage %.2f is too low to activate sampler mechanism.\n", voltage);
+#else
+    led_error("Battery voltage is too low to activate sampler mechanism.");
+#endif
+  }
 }
 
-void vbat_get(void) {
-  int rawValue = analogRead(WB_A1);
+bool vbat_get(void) {
+  int rawValue = analogRead(ANALOG_PIN1);
   voltage = rawValue / voltMagic;
 #if DEBUG
   Serial.printf("Raw vbat input: %d | Voltage: %.2f\n", rawValue, voltage);
-#else
+#endif
   // Don't draw the battery down below safe threshold
   if (voltage <= MIN_VBAT) {
-    led_error("Battery voltage is too low to activate sampler mechanism.");
+    return false;
   }
-#endif
+  return true;
 }
 
 void sensor_init(void) {
@@ -386,8 +404,6 @@ void bleuart_rx_callback(uint16_t conn_handle) {
 
 void relay_handler(bool override) {
   if (!samplerActive && sampling_conditions()) {
-    // Check battery level before activating sampler
-    vbat_get();
     samplerActive = true;
     startTime = millis();
 #if DEBUG
