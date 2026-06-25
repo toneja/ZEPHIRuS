@@ -119,38 +119,38 @@ void loop() {
   if (newDataAvailable) {
     newDataAvailable = false;
     // Check battery level before activating sampler
-    if (!vbat_get()) {
+    if (vbat_get()) {
+      // Flash green LED while handling BLEUart data
+      digitalWrite(LED_GREEN, HIGH);
+      // Make a copy to avoid strtok corruption issues
+      char msgCopy[BLE_BUF_SIZE];
+      strncpy(msgCopy, bleMsg, sizeof(msgCopy) - 1);
+      char* token;
+      token = strtok(msgCopy, ",");
+      if (token == NULL || strlen(token) <= 0) { return; }
+      pendingData.windSpeed = atof(token);
+      token = strtok(NULL, ",");
+      if (token == NULL || strlen(token) <= 0) { return; }
+      pendingData.windTemp = atof(token);
+      observed = pendingData;
+      if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
+#if DEBUG
+      Serial.printf("WindSpeed: %.2f, WindTemp: %.2f\n", observed.windSpeed, observed.windTemp);
+#endif
+      // Handle relay and perform all I/O here
+      relay_handler(false);
+      // LED off, when sampler inactive
+      if (!samplerActive) {
+        delay(50);
+        digitalWrite(LED_GREEN, LOW);
+      }
+    } else {
 #if DEBUG
       Serial.printf("Battery voltage %.2f is too low to activate sampler mechanism.", voltage);
 #else
       // Force sampler to shutdown if it is running
       if (samplerActive) { relay_handler(true); }
-      return;
 #endif
-    }
-    // Flash green LED while handling BLEUart data
-    digitalWrite(LED_GREEN, HIGH);
-    // Make a copy to avoid strtok corruption issues
-    char msgCopy[BLE_BUF_SIZE];
-    strncpy(msgCopy, bleMsg, sizeof(msgCopy) - 1);
-    char* token;
-    token = strtok(msgCopy, ",");
-    if (token == NULL || strlen(token) <= 0) { return; }
-    pendingData.windSpeed = atof(token);
-    token = strtok(NULL, ",");
-    if (token == NULL || strlen(token) <= 0) { return; }
-    pendingData.windTemp = atof(token);
-    observed = pendingData;
-    if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
-#if DEBUG
-    Serial.printf("WindSpeed: %.2f, WindTemp: %.2f\n", observed.windSpeed, observed.windTemp);
-#endif
-    // Handle relay and perform all I/O here
-    relay_handler(false);
-    // LED off, when sampler inactive
-    if (!samplerActive) {
-      delay(50);
-      digitalWrite(LED_GREEN, LOW);
     }
   }
   // Only pet watchdog if 5 seconds have elapsed
@@ -230,9 +230,7 @@ bool vbat_get(void) {
   Serial.printf("Raw vbat input: %d | Voltage: %.2f\n", rawValue, voltage);
 #endif
   // Don't draw the battery down below safe threshold
-  if (voltage <= MIN_VBAT) {
-    return false;
-  }
+  if (voltage <= MIN_VBAT) { return false; }
   return true;
 }
 
@@ -263,9 +261,7 @@ void sd_init(void) {
   char csvFilename[12 + 1];
   for (uint8_t i = 0; i <= 99; i++) {
     snprintf(csvFilename, sizeof(csvFilename), "ZEPH%s%02d.csv", zephName, i);
-    if (!SD.exists(csvFilename)) {
-      break;
-    }
+    if (!SD.exists(csvFilename)) { break; }
   }
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { led_error("Unable to create CSV file."); }
