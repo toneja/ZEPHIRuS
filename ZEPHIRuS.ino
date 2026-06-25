@@ -33,7 +33,7 @@
 #include "SD.h"
 
 #define DEBUG 0
-#define VERSION 20260624  // Date last modified
+#define VERSION 20260625  // Date last modified
 
 // BLUETOOTH
 BLEDis bledis;
@@ -406,6 +406,7 @@ void bleuart_rx_callback(uint16_t conn_handle) {
 }
 
 void relay_handler(bool override) {
+  if (override) { digitalWrite(LED_GREEN, LOW); }  // make sure green LED is off when overriding relay
   if (!samplerActive && sampling_conditions()) {
     samplerActive = true;
     startTime = millis();
