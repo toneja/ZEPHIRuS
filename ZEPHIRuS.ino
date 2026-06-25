@@ -33,7 +33,7 @@
 #include "SD.h"
 
 #define DEBUG 0
-#define VERSION 20260623  // Date last modified
+#define VERSION 20260624  // Date last modified
 
 // BLUETOOTH
 BLEDis bledis;
@@ -272,7 +272,8 @@ void sd_init(void) {
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
   if (!logFile) { led_error("Unable to create LOG file."); }
-  logFile.printf("==========================================\nZEPHIRuS VERSION %d\n\nBattery voltage: %.2f\n", VERSION, voltage);
+  logFile.printf("==========================================\%s VERSION %d\n", bleName, VERSION);
+  logFile.printf("Battery voltage: %.2f\nTargeted wind speed: %.2f m/s\n", voltage, targeted.windSpeed);
   logFile.flush();
 }
 
@@ -288,6 +289,9 @@ void load_config(void) {
   zephName = doc["ZEPHIRuS"];
   snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephName);
   targeted.windSpeed = doc["windSpeed"];
+#if DEBUG
+  Serial.printf("%s - Targeted wind speed: %.2f m/s\n", bleName, targeted.windSpeed);
+#endif
 }
 
 void gps_init(void) {
