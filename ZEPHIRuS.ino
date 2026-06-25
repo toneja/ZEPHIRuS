@@ -251,7 +251,10 @@ void relay_init(void) {
 }
 
 void sd_init(void) {
-  if (!SD.begin()) { led_error("No SD Card found."); }
+  // Check if card is inserted
+  pinMode(WB_IO6, INPUT_PULLUP);
+  if (!digitalRead(WB_IO6) == LOW) { led_error("No SD Card inserted."); }
+  if (!SD.begin()) { led_error("Unable to mount the SD Card."); }
 #if DEBUG
   Serial.println("SD Card mounted.");
 #endif
