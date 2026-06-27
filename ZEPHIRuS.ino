@@ -145,12 +145,8 @@ void loop() {
         digitalWrite(LED_GREEN, LOW);
       }
     } else {
-#if DEBUG
-      Serial.printf("Battery voltage %.2f is too low to activate sampler mechanism.", voltage);
-#else
       // Force sampler to shutdown if it is running
       if (samplerActive) { relay_handler(true); }
-#endif
     }
   }
   // Only pet watchdog if 5 seconds have elapsed
@@ -228,9 +224,10 @@ bool vbat_get(void) {
   voltage = rawValue / voltMagic;
 #if DEBUG
   Serial.printf("Raw vbat input: %d | Voltage: %.2f\n", rawValue, voltage);
-#endif
+#else
   // Don't draw the battery down below safe threshold
   if (voltage <= MIN_VBAT) { return false; }
+#endif
   return true;
 }
 
