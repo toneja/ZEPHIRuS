@@ -440,7 +440,7 @@ void relay_handler(bool override) {
 }
 
 bool sampling_conditions(void) {
-  return observed.windSpeed >= targeted.windSpeed;
+  return observed.windSpeed >= targeted.windSpeed && observed.windSpeed < targeted.windSpeed + 1;
 }
 
 void log_data(void) {
