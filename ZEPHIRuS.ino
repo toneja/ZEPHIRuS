@@ -33,7 +33,7 @@
 #include "SD.h"
 
 #define DEBUG 0
-#define VERSION 20260625  // Date last modified
+#define VERSION 20260701  // Date last modified
 
 // BLUETOOTH
 BLEDis bledis;
@@ -210,13 +210,7 @@ void vbat_init(void) {
   pinMode(ANALOG_PIN1, INPUT);
   analogReference(AR_INTERNAL_3_0);  // 3.0 Volts
   analogReadResolution(12);          // 12-bit resolution
-  if (!vbat_get()) {
-#if DEBUG
-    Serial.printf("Battery voltage %.2f is too low to activate sampler mechanism.\n", voltage);
-#else
-    led_error("Battery voltage is too low to activate sampler mechanism.");
-#endif
-  }
+  if (!vbat_get()) { led_error("Battery voltage is too low to activate sampler mechanism."); }
 }
 
 bool vbat_get(void) {
@@ -268,7 +262,7 @@ void sd_init(void) {
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
   if (!logFile) { led_error("Unable to create LOG file."); }
-  logFile.printf("==========================================\%s VERSION %d\n", bleName, VERSION);
+  logFile.printf("==========================================\n%s VERSION %d\n", bleName, VERSION);
   logFile.printf("Battery voltage: %.2f\nTargeted wind speed: %.2f m/s\n", voltage, targeted.windSpeed);
   logFile.flush();
 }
