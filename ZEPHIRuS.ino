@@ -22,6 +22,7 @@
 *   RELAY:  RAK WIRELESS 13007                                          *
 *   SDCARD: RAK WIRELESS 15002                                          *
 *   GPS:    RAK WIRELESS 12500                                          *
+*   OLED:   RAK WIRELESS 1921 (Optional)                                *
 *   VBAT:   Generic 0-25V DC Voltage Sensor Module                      *
 ************************************************************************/
 
@@ -30,10 +31,38 @@
 #include <SparkFun_u-blox_GNSS_Arduino_Library.h>
 #include <Adafruit_SleepyDog.h>
 #include <ArduinoJson.h>
+#include <U8g2lib.h>
 #include "SD.h"
 
 #define DEBUG 0
-#define VERSION 20260701  // Date last modified
+#define VERSION 20260704  // Date last modified
+
+// DISPLAY
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
+bool displayActive;
+char displayMsg[32];
+#define EMOJI_WIDTH 8
+#define EMOJI_HEIGHT 8
+const unsigned char smiley[] PROGMEM = {
+  0x3C,
+  0x42,
+  0xA5,
+  0x81,
+  0xA5,
+  0x99,
+  0x42,
+  0x3C
+};
+const unsigned char frowny[] PROGMEM = {
+  0x3C,
+  0x42,
+  0xA5,
+  0x81,
+  0x99,
+  0xA5,
+  0x42,
+  0x3C
+};
 
 // BLUETOOTH
 BLEDis bledis;
@@ -70,9 +99,7 @@ unsigned long lastFix = 0;
 bool samplerActive = false;
 unsigned long startTime = 0;  // milliseconds
 uint16_t sampleLength = 0;    // seconds
-#if DEBUG
 uint16_t sampleCount = 0;
-#endif
 
 // WATCHDOG: Non-blocking timer
 unsigned long lastWatchdogPet = 0;
@@ -88,6 +115,10 @@ float voltMagic = MAX_COUNTS / MAX_VINPUT / DIVIDER_RATIO;
 float voltage;
 
 void setup() {
+  // I2C
+  sensor_init();
+  // DISPLAY
+  oled_init();
   // LEDs
   led_init();
 #if DEBUG
@@ -96,8 +127,6 @@ void setup() {
 #endif
   // VBAT
   vbat_init();
-  // I2C
-  sensor_init();
   // RELAY
   relay_init();
   // SDCARD
@@ -110,6 +139,13 @@ void setup() {
   Watchdog.enable(10000);
   lastWatchdogPet = millis();
   // ALL CLEAR
+  if (displayActive) {
+    if (Bluefruit.connected()) {
+      oled_update(true);
+    } else {
+      oled_update(false);
+    }
+  }
   logFile.println("BOOT SUCCESSFUL.");
   logFile.flush();
 }
@@ -159,14 +195,77 @@ void loop() {
   if (now - lastFix >= 12 * 60 * 60 * 1000) { gps_get(); }
 }
 
-#if DEBUG
-void serial_init(void) {
-  Serial.begin(115200);
-  delay(2000);
-  // while (!Serial) { delay(100); }
-  Serial.printf("ZEPHIRuS - SAMPLER VERSION %d\n", VERSION);
+void sensor_init(void) {
+  // I2C
+  pinMode(WB_IO2, OUTPUT);
+  digitalWrite(WB_IO2, HIGH);
+  delay(1000);
+  Wire.begin();
+  delay(1000);  // give em a sec to wake up
 }
+
+void oled_init(void) {
+  if (!u8g2.begin()) {
+    displayActive = false;
+  } else {
+    displayActive = true;
+    u8g2.setContrast(0);  // Minimum brightness [0-255]
+    u8g2.setFont(u8g2_font_6x10_tf);
+    // Display the logo
+    u8g2.clearBuffer();
+    draw_logo(32, 0);
+    u8g2.sendBuffer();
+    delay(3000);
+    // Welcome message
+    u8g2.clearBuffer();
+    u8g2.drawStr(16, 15, "ZEPHIRuS SAMPLER");
+    u8g2.drawStr(16, 30, "PLEASE WAIT.....");
+    u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, smiley);
+    u8g2.sendBuffer();
+  }
+}
+
+void draw_logo(uint8_t x, uint8_t y) {
+  u8g2.drawCircle(x + 32, y + 32, 31);  // Outer circle
+  u8g2.drawCircle(x + 32, y + 32, 30);  // Thicken the border
+  // Letter Z
+  u8g2.drawLine(x + 18, y + 18, x + 46, y + 18);  // top
+  u8g2.drawLine(x + 46, y + 18, x + 18, y + 46);  // diagonal
+  u8g2.drawLine(x + 18, y + 46, x + 46, y + 46);  // bottom
+}
+
+void oled_update(bool connected) {
+  u8g2.clearBuffer();
+  // Device name
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(bleName)) / 2, 10, bleName);
+  if (connected) {
+    // FW Version
+    memset(displayMsg, 0, sizeof(displayMsg));
+    snprintf(displayMsg, sizeof(displayMsg), "VERSION: %d", VERSION);
+    u8g2.drawStr(0, 20, displayMsg);
+    // Battery voltage
+    memset(displayMsg, 0, sizeof(displayMsg));
+    snprintf(displayMsg, sizeof(displayMsg), "BATTERY: %.2fV", voltage);
+    u8g2.drawStr(0, 30, displayMsg);
+    // Sampler status
+    memset(displayMsg, 0, sizeof(displayMsg));
+    snprintf(displayMsg, sizeof(displayMsg), "SAMPLER: %s", samplerActive ? "ACTIVE" : "INACTIVE");
+    u8g2.drawStr(0, 40, displayMsg);
+    // Sample count
+    memset(displayMsg, 0, sizeof(displayMsg));
+    snprintf(displayMsg, sizeof(displayMsg), "SAMPLES: %d", sampleCount);
+    u8g2.drawStr(0, 50, displayMsg);
+#if DEBUG
+    u8g2.drawStr(0, 60, "DEBUGGING: ON");
+#else
+    u8g2.drawStr(0, 60, "DEBUGGING: OFF");
 #endif
+  } else {
+    u8g2.drawStr(25, 25, "WAITING FOR A");
+    u8g2.drawStr(4, 35, "BLUETOOTH CONNECTION");
+  }
+  u8g2.sendBuffer();
+}
 
 void led_init(void) {
   pinMode(LED_GREEN, OUTPUT);
@@ -183,13 +282,30 @@ void led_loop(int count) {
   }
 }
 
-void led_error(const char* errMsg) {
+#if DEBUG
+void serial_init(void) {
+  Serial.begin(115200);
+  delay(2000);
+  // while (!Serial) { delay(100); }
+  Serial.printf("ZEPHIRuS - SAMPLER VERSION %d\n", VERSION);
+}
+#endif
+
+void error(const char* err, const char* errMsg) {
   digitalWrite(LED_GREEN, HIGH);
   if (csvFile) { csvFile.close(); }
   if (logFile) {
     logFile.println(errMsg);
     logFile.flush();
     logFile.close();
+  }
+  if (displayActive) {
+    u8g2.clearBuffer();
+    // Center the text
+    u8g2.drawStr(46, 25, "ERROR:");
+    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(err)) / 2, 35, err);
+    u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, frowny);
+    u8g2.sendBuffer();
   }
   while (1) {
     digitalWrite(LED_BLUE, HIGH);
@@ -210,7 +326,7 @@ void vbat_init(void) {
   pinMode(ANALOG_PIN1, INPUT);
   analogReference(AR_INTERNAL_3_0);  // 3.0 Volts
   analogReadResolution(12);          // 12-bit resolution
-  if (!vbat_get()) { led_error("Battery voltage is too low to activate sampler mechanism."); }
+  if (!vbat_get()) { error("BATTERY LEVEL", "Battery voltage is too low to activate sampler mechanism."); }
 }
 
 bool vbat_get(void) {
@@ -225,15 +341,6 @@ bool vbat_get(void) {
   return true;
 }
 
-void sensor_init(void) {
-  // I2C
-  pinMode(WB_IO2, OUTPUT);
-  digitalWrite(WB_IO2, HIGH);
-  delay(1000);
-  Wire.begin();
-  delay(1000);  // give em a sec to wake up
-}
-
 void relay_init(void) {
   pinMode(WB_IO4, OUTPUT);
   digitalWrite(WB_IO4, LOW);
@@ -242,8 +349,8 @@ void relay_init(void) {
 void sd_init(void) {
   // Check if card is inserted
   pinMode(WB_IO6, INPUT_PULLUP);
-  if (!digitalRead(WB_IO6) == LOW) { led_error("No SD Card inserted."); }
-  if (!SD.begin()) { led_error("Unable to mount the SD Card."); }
+  if (!digitalRead(WB_IO6) == LOW) { error("SDCARD MISSING", "No SD Card inserted."); }
+  if (!SD.begin()) { error("SDCARD FS", "Unable to mount the SD Card."); }
 #if DEBUG
   Serial.println("SD Card mounted.");
 #endif
@@ -255,13 +362,13 @@ void sd_init(void) {
     if (!SD.exists(csvFilename)) { break; }
   }
   csvFile = SD.open(csvFilename, FILE_WRITE);
-  if (!csvFile) { led_error("Unable to create CSV file."); }
+  if (!csvFile) { error("CSV FILE", "Unable to create CSV file."); }
   if (csvFile.size() == 0) {
     csvFile.println("Date,Time,WindSpeed,WindTemp,MaxSpeed,Length");
     csvFile.flush();
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
-  if (!logFile) { led_error("Unable to create LOG file."); }
+  if (!logFile) { error("LOG FILE", "Unable to create LOG file."); }
   logFile.printf("==========================================\n%s VERSION %d\n", bleName, VERSION);
   logFile.printf("Battery voltage: %.2f\nTargeted wind speed: %.2f m/s\n", voltage, targeted.windSpeed);
   logFile.flush();
@@ -269,13 +376,13 @@ void sd_init(void) {
 
 void load_config(void) {
   File zfile = SD.open("zconfig.txt");
-  if (!zfile) { led_error("Unable to read zconfig.txt."); }
+  if (!zfile) { error("CONFIG FILE", "Unable to read zconfig.txt."); }
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, zfile);
+  DeserializationError jsonError = deserializeJson(doc, zfile);
   zfile.close();
-  if (error) { led_error("Unable to read json configuration."); }
-  if ((!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) != 2)) { led_error("Config error: 'ZEPHIRuS'"); }
-  if (!doc.containsKey("windSpeed")) { led_error("Config error: 'windSpeed'"); }
+  if (jsonError) { error("JSON CONFIG", "Unable to read json configuration."); }
+  if (!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) != 2) { error("ZEPHIRuS NAME", "Config error: 'ZEPHIRuS'"); }
+  if (!doc.containsKey("windSpeed")) { error("WINDSPEED", "Config error: 'windSpeed'"); }
   zephName = doc["ZEPHIRuS"];
   snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephName);
   targeted.windSpeed = doc["windSpeed"];
@@ -285,7 +392,7 @@ void load_config(void) {
 }
 
 void gps_init(void) {
-  if (!g_myGNSS.begin()) { led_error("GPS not found."); }
+  if (!g_myGNSS.begin()) { error("GPS", "GPS not found."); }
   g_myGNSS.setI2COutput(COM_TYPE_UBX);
   g_myGNSS.saveConfigSelective(VAL_CFG_SUBSEC_IOPORT);
   // Wait on the GPS fix for accurate timestamps
@@ -371,6 +478,7 @@ void connect_callback(uint16_t conn_handle) {
   connection->getPeerName(central_name, sizeof(central_name));
   Serial.printf("Connected to %s\n", central_name);
 #endif
+  if (displayActive) { oled_update(true); }
 }
 
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
@@ -383,6 +491,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   observed = {};
   // Force sampler to shutdown if it is running
   if (samplerActive) { relay_handler(true); }
+  if (displayActive) { oled_update(false); }
 }
 
 void bleuart_rx_callback(uint16_t conn_handle) {
@@ -400,9 +509,9 @@ void relay_handler(bool override) {
   if (override) { digitalWrite(LED_GREEN, LOW); }  // make sure green LED is off when overriding relay
   if (!samplerActive && sampling_conditions()) {
     samplerActive = true;
+    sampleCount++;
     startTime = millis();
 #if DEBUG
-    sampleCount++;
     Serial.println("Sampler Active ... ");
     // Loop LEDs
     led_loop(5);
@@ -427,6 +536,14 @@ void relay_handler(bool override) {
 #endif
     log_data();
     maxWindSpeed = 0;
+  }
+  // Refresh display data
+  if (displayActive) {
+    if (Bluefruit.connected()) {
+      oled_update(true);
+    } else {
+      oled_update(false);
+    }
   }
 }
 
