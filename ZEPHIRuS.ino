@@ -19,10 +19,10 @@
 * Expected hardware components:                                         *
 *   BASE:   RAK WIRELESS 19001                                          *
 *   CORE:   RAK WIRELESS 4631                                           *
-*   RELAY:  RAK WIRELESS 13007                                          *
 *   SDCARD: RAK WIRELESS 15002                                          *
 *   GPS:    RAK WIRELESS 12500                                          *
 *   OLED:   RAK WIRELESS 1921 (Optional)                                *
+*   RELAY:  MonkMakes MOSFETTI 4-way Switch                             *
 *   VBAT:   Generic 0-25V DC Voltage Sensor Module                      *
 ************************************************************************/
 
@@ -34,8 +34,8 @@
 #include <U8g2lib.h>
 #include "SD.h"
 
-#define DEBUG 0
-#define VERSION 20260704  // Date last modified
+#define DEBUG 1
+#define VERSION 20260709  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -71,6 +71,7 @@ char bleName[12];
 const char* zephName;
 #define BLE_BUF_SIZE 20  // default BLEUart packet size
 char bleMsg[BLE_BUF_SIZE];
+char central_name[32];
 
 // BLEUart Sensor Data
 struct EnvironmentData {
@@ -79,10 +80,8 @@ struct EnvironmentData {
   // float leafWetness;
 };
 EnvironmentData observed = {};
-EnvironmentData targeted = {};
 EnvironmentData pendingData = {};
 volatile bool newDataAvailable = false;
-float maxWindSpeed = 0;
 
 // Log files
 File csvFile;
@@ -95,11 +94,18 @@ char timestamp[20];
 char gpsLoc[55];
 unsigned long lastFix = 0;
 
-// RELAY: timer
-bool samplerActive = false;
+// RELAY: MOSFETTI 4-way switch
+#define RELAY_COUNT 4
+#define RELAY_PIN1 WB_IO1
+#define RELAY_PIN2 WB_IO3
+#define RELAY_PIN3 WB_IO4
+#define RELAY_PIN4 WB_IO5
+const uint8_t relayPins[] = { RELAY_PIN1, RELAY_PIN2, RELAY_PIN3, RELAY_PIN4 };
+uint8_t samplerActive = 0;    // 0 = All relays OFF
 unsigned long startTime = 0;  // milliseconds
 uint16_t sampleLength = 0;    // seconds
-uint16_t sampleCount = 0;
+uint16_t sampleCount[RELAY_COUNT] = {};
+uint8_t targeted[RELAY_COUNT] = {};
 
 // WATCHDOG: Non-blocking timer
 unsigned long lastWatchdogPet = 0;
@@ -139,13 +145,7 @@ void setup() {
   Watchdog.enable(10000);
   lastWatchdogPet = millis();
   // ALL CLEAR
-  if (displayActive) {
-    if (Bluefruit.connected()) {
-      oled_update(true);
-    } else {
-      oled_update(false);
-    }
-  }
+  if (displayActive) { oled_update(); }
   logFile.println("BOOT SUCCESSFUL.");
   logFile.flush();
 }
@@ -169,12 +169,11 @@ void loop() {
       if (token == NULL || strlen(token) <= 0) { return; }
       pendingData.windTemp = atof(token);
       observed = pendingData;
-      if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
 #if DEBUG
       Serial.printf("WindSpeed: %.2f, WindTemp: %.2f\n", observed.windSpeed, observed.windTemp);
 #endif
       // Handle relay and perform all I/O here
-      relay_handler(false);
+      relay_handler();
       // LED off, when sampler inactive
       if (!samplerActive) {
         delay(50);
@@ -182,7 +181,7 @@ void loop() {
       }
     } else {
       // Force sampler to shutdown if it is running
-      if (samplerActive) { relay_handler(true); }
+      if (samplerActive) { disable_relay(true); }
     }
   }
   // Only pet watchdog if 5 seconds have elapsed
@@ -234,32 +233,38 @@ void draw_logo(uint8_t x, uint8_t y) {
   u8g2.drawLine(x + 18, y + 46, x + 46, y + 46);  // bottom
 }
 
-void oled_update(bool connected) {
+void oled_update() {
   u8g2.clearBuffer();
   // Device name
-  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(bleName)) / 2, 10, bleName);
-  if (connected) {
+  memset(displayMsg, 0, sizeof(displayMsg));
+  snprintf(displayMsg, sizeof(displayMsg),
+#if DEBUG
+           "%s DEBUG=ON",
+#else
+           "%s DEBUG=OFF",
+#endif
+           bleName);
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(displayMsg)) / 2, 10, displayMsg);
+  if (Bluefruit.connected()) {
     // FW Version
     memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "VERSION: %d", VERSION);
+    snprintf(displayMsg, sizeof(displayMsg), "CENTRAL  %s", central_name);
     u8g2.drawStr(0, 20, displayMsg);
     // Battery voltage
     memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "BATTERY: %.2fV", voltage);
+    snprintf(displayMsg, sizeof(displayMsg), "BATTERY  %.2fV", voltage);
     u8g2.drawStr(0, 30, displayMsg);
     // Sampler status
     memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "SAMPLER: %s", samplerActive ? "ACTIVE" : "INACTIVE");
+    snprintf(displayMsg, sizeof(displayMsg), "SAMPLER  %s", samplerActive ? "ACTIVE" : "INACTIVE");
     u8g2.drawStr(0, 40, displayMsg);
     // Sample count
     memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "SAMPLES: %d", sampleCount);
+    snprintf(displayMsg, sizeof(displayMsg), "SAMPLES  A=%d B=%d", sampleCount[0], sampleCount[1]);
     u8g2.drawStr(0, 50, displayMsg);
-#if DEBUG
-    u8g2.drawStr(0, 60, "DEBUGGING: ON");
-#else
-    u8g2.drawStr(0, 60, "DEBUGGING: OFF");
-#endif
+    memset(displayMsg, 0, sizeof(displayMsg));
+    snprintf(displayMsg, sizeof(displayMsg), "COUNTED  C=%d D=%d", sampleCount[2], sampleCount[3]);
+    u8g2.drawStr(0, 60, displayMsg);
   } else {
     u8g2.drawStr(25, 25, "WAITING FOR A");
     u8g2.drawStr(4, 35, "BLUETOOTH CONNECTION");
@@ -342,8 +347,14 @@ bool vbat_get(void) {
 }
 
 void relay_init(void) {
-  pinMode(WB_IO4, OUTPUT);
-  digitalWrite(WB_IO4, LOW);
+  pinMode(RELAY_PIN1, OUTPUT);
+  pinMode(RELAY_PIN2, OUTPUT);
+  pinMode(RELAY_PIN3, OUTPUT);
+  pinMode(RELAY_PIN4, OUTPUT);
+  digitalWrite(RELAY_PIN1, LOW);
+  digitalWrite(RELAY_PIN2, LOW);
+  digitalWrite(RELAY_PIN3, LOW);
+  digitalWrite(RELAY_PIN4, LOW);
 }
 
 void sd_init(void) {
@@ -364,13 +375,14 @@ void sd_init(void) {
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { error("CSV FILE", "Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time,WindSpeed,WindTemp,MaxSpeed,Length");
+    csvFile.println("Date,Time,WindSpeed,WindTemp,Length");
     csvFile.flush();
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
   if (!logFile) { error("LOG FILE", "Unable to create LOG file."); }
-  logFile.printf("==========================================\n%s VERSION %d\n", bleName, VERSION);
-  logFile.printf("Battery voltage: %.2f\nTargeted wind speed: %.2f m/s\n", voltage, targeted.windSpeed);
+  logFile.printf("==========================================\n");
+  logFile.printf("%s VERSION %d\nBattery voltage: %.2f\n", bleName, VERSION, voltage);
+  logFile.printf("Targeted wind speeds: %d, %d, %d, %d m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
   logFile.flush();
 }
 
@@ -382,13 +394,18 @@ void load_config(void) {
   zfile.close();
   if (jsonError) { error("JSON CONFIG", "Unable to read json configuration."); }
   if (!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) != 2) { error("ZEPHIRuS NAME", "Config error: 'ZEPHIRuS'"); }
-  if (!doc.containsKey("windSpeed")) { error("WINDSPEED", "Config error: 'windSpeed'"); }
+  if (!doc.containsKey("windSpeeds") || doc["windSpeeds"].size() != RELAY_COUNT) { error("WINDSPEEDS", "Config error: 'windSpeeds'"); }
   zephName = doc["ZEPHIRuS"];
   snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephName);
-  targeted.windSpeed = doc["windSpeed"];
+  JsonArray array = doc["windSpeeds"];
+  uint8_t i = 0;
+  for (JsonVariant value : array) {
+    targeted[i] = value.as<int>();
 #if DEBUG
-  Serial.printf("%s - Targeted wind speed: %.2f m/s\n", bleName, targeted.windSpeed);
+    Serial.printf("Targeted wind speed [%d]: %d m/s\n", i + 1, targeted[i]);
 #endif
+    i++;
+  }
 }
 
 void gps_init(void) {
@@ -474,11 +491,11 @@ void startAdv(void) {
 void connect_callback(uint16_t conn_handle) {
 #if DEBUG
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
-  char central_name[32] = { 0 };
+  memset(central_name, 0, sizeof(central_name));
   connection->getPeerName(central_name, sizeof(central_name));
   Serial.printf("Connected to %s\n", central_name);
 #endif
-  if (displayActive) { oled_update(true); }
+  if (displayActive) { oled_update(); }
 }
 
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
@@ -490,8 +507,8 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   // Clear observed data
   observed = {};
   // Force sampler to shutdown if it is running
-  if (samplerActive) { relay_handler(true); }
-  if (displayActive) { oled_update(false); }
+  if (samplerActive) { disable_relay(true); }
+  if (displayActive) { oled_update(); }
 }
 
 void bleuart_rx_callback(uint16_t conn_handle) {
@@ -505,50 +522,51 @@ void bleuart_rx_callback(uint16_t conn_handle) {
   newDataAvailable = true;
 }
 
-void relay_handler(bool override) {
-  if (override) { digitalWrite(LED_GREEN, LOW); }  // make sure green LED is off when overriding relay
-  if (!samplerActive && sampling_conditions()) {
-    samplerActive = true;
-    sampleCount++;
-    startTime = millis();
-#if DEBUG
-    Serial.println("Sampler Active ... ");
-    // Loop LEDs
-    led_loop(5);
-#else
-    // Relay ON
-    digitalWrite(WB_IO4, HIGH);
-#endif
-    log_data();
-  }
-  if (samplerActive && (!sampling_conditions() || override)) {
-    samplerActive = false;
-    sampleLength = (millis() - startTime) / 1000;
-#if DEBUG
-    Serial.printf(" ... Sampling complete after %d seconds.\n", sampleLength);
-    Serial.printf("Max wind speed: %.2f\n", maxWindSpeed);
-    Serial.printf("Sample count: %d\n", sampleCount);
-    // Loop LEDs
-    led_loop(5);
-#else
-    // Relay OFF
-    digitalWrite(WB_IO4, LOW);
-#endif
-    log_data();
-    maxWindSpeed = 0;
-  }
-  // Refresh display data
-  if (displayActive) {
-    if (Bluefruit.connected()) {
-      oled_update(true);
+void relay_handler(void) {
+  for (uint8_t relay = 0; relay < RELAY_COUNT; relay++) {
+    if (sampling_conditions(relay)) {
+      if (samplerActive && samplerActive != relayPins[relay]) { disable_relay(false); }
+      if (!samplerActive) { enable_relay(relay); }
     } else {
-      oled_update(false);
+      if (samplerActive == relayPins[relay]) { disable_relay(false); }
     }
   }
+  // Refresh display data
+  if (displayActive) { oled_update(); }
 }
 
-bool sampling_conditions(void) {
-  return observed.windSpeed >= targeted.windSpeed && observed.windSpeed < targeted.windSpeed + 1;
+bool sampling_conditions(uint8_t relay) {
+  return observed.windSpeed >= targeted[relay] && observed.windSpeed < targeted[relay] + 1;
+}
+
+void enable_relay(uint8_t relay) {
+  samplerActive = relayPins[relay];
+  sampleCount[relay]++;
+  startTime = millis();
+#if DEBUG
+  Serial.printf("Sampler [%d] Active ... \n", relay + 1);
+  // Loop LEDs
+  led_loop(2);
+#else
+  // RELAY ON
+  digitalWrite(samplerActive, HIGH);
+#endif
+  log_data();
+}
+
+void disable_relay(bool override) {
+  if (override) { digitalWrite(LED_GREEN, LOW); }
+  sampleLength = (millis() - startTime) / 1000;
+#if DEBUG
+  Serial.printf(" ... Sampling complete after %d seconds.\n", sampleLength);
+  // Loop LEDs
+  led_loop(2);
+#else
+  // Relay OFF
+  digitalWrite(samplerActive, LOW);
+#endif
+  samplerActive = 0;
+  log_data();
 }
 
 void log_data(void) {
@@ -563,8 +581,7 @@ void log_data(void) {
   } else {
     snprintf(msgBuf,
              sizeof(msgBuf),
-             ",%.2f,%d\n",
-             maxWindSpeed,
+             ",%d\n",
              sampleLength);
   }
   csvFile.print(msgBuf);
