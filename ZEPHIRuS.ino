@@ -75,6 +75,7 @@ char bleMsg[BLE_BUF_SIZE];
 // BLEUart Sensor Data
 struct EnvironmentData {
   float windSpeed;
+  float windDir;
   float windTemp;
   // float leafWetness;
 };
@@ -167,11 +168,14 @@ void loop() {
       pendingData.windSpeed = atof(token);
       token = strtok(NULL, ",");
       if (token == NULL || strlen(token) <= 0) { return; }
+      pendingData.windDir = atof(token);
+      token = strtok(NULL, ",");
+      if (token == NULL || strlen(token) <= 0) { return; }
       pendingData.windTemp = atof(token);
       observed = pendingData;
       if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
 #if DEBUG
-      Serial.printf("WindSpeed: %.2f, WindTemp: %.2f\n", observed.windSpeed, observed.windTemp);
+      Serial.printf("WindSpeed: %.2f, WindDir: %.1f, WindTemp: %.1f\n", observed.windSpeed, observed.windDir, observed.windTemp);
 #endif
       // Handle relay and perform all I/O here
       relay_handler(false);
@@ -364,7 +368,7 @@ void sd_init(void) {
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { error("CSV FILE", "Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time,WindSpeed,WindTemp,MaxSpeed,Length");
+    csvFile.println("Date,Time,WindSpeed,WindDir,WindTemp,MaxSpeed,Length");
     csvFile.flush();
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
@@ -556,9 +560,10 @@ void log_data(void) {
     gps_gettime();
     snprintf(msgBuf,
              sizeof(msgBuf),
-             "%s,%.2f,%.2f",
+             "%s,%.2f,%.1f,%.1f",
              timestamp,
              observed.windSpeed,
+             observed.windDir,
              observed.windTemp);
   } else {
     snprintf(msgBuf,
