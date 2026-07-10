@@ -21,9 +21,10 @@
 *   CORE:   RAK WIRELESS 4631                                           *
 *   SDCARD: RAK WIRELESS 15002                                          *
 *   GPS:    RAK WIRELESS 12500                                          *
-*   OLED:   RAK WIRELESS 1921 (Optional)                                *
 *   RELAY:  MonkMakes MOSFETTI 4-way Switch                             *
 *   VBAT:   Generic 0-25V DC Voltage Sensor Module                      *
+*   OLED:   RAK WIRELESS 1921 (Optional)                                *
+*   IO:     RAK WIRELESS 13002 (Optional)                               *
 ************************************************************************/
 
 #include <bluefruit.h>
@@ -35,7 +36,7 @@
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION 20260709  // Date last modified
+#define VERSION 20260710  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -68,7 +69,7 @@ const unsigned char frowny[] PROGMEM = {
 BLEDis bledis;
 BLEUart bleuart;
 char bleName[12];
-const char* zephName;
+const char* zephID;
 #define BLE_BUF_SIZE 20  // default BLEUart packet size
 char bleMsg[BLE_BUF_SIZE];
 char central_name[32];
@@ -87,7 +88,6 @@ volatile bool newDataAvailable = false;
 // Log files
 File csvFile;
 File logFile;
-char msgBuf[128];
 
 // GPS: position + timestamp
 SFE_UBLOX_GNSS g_myGNSS;
@@ -118,7 +118,7 @@ unsigned long lastWatchdogPet = 0;
 #define MAX_COUNTS 4095.0  // 12-bits
 #define MAX_VINPUT 3.0
 #define DIVIDER_RATIO 5.0
-float voltMagic = MAX_COUNTS / MAX_VINPUT / DIVIDER_RATIO;
+uint16_t voltMagic = MAX_COUNTS / MAX_VINPUT / DIVIDER_RATIO;
 float voltage;
 
 void setup() {
@@ -240,15 +240,7 @@ void draw_logo(uint8_t x, uint8_t y) {
 void oled_update() {
   u8g2.clearBuffer();
   // Device name
-  memset(displayMsg, 0, sizeof(displayMsg));
-  snprintf(displayMsg, sizeof(displayMsg),
-#if DEBUG
-           "%s DEBUG=ON",
-#else
-           "%s DEBUG=OFF",
-#endif
-           bleName);
-  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(displayMsg)) / 2, 10, displayMsg);
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(bleName)) / 2, 10, bleName);
   if (Bluefruit.connected()) {
     // FW Version
     memset(displayMsg, 0, sizeof(displayMsg));
@@ -373,7 +365,7 @@ void sd_init(void) {
   load_config();
   char csvFilename[12 + 1];
   for (uint8_t i = 0; i <= 99; i++) {
-    snprintf(csvFilename, sizeof(csvFilename), "ZEPH%s%02d.csv", zephName, i);
+    snprintf(csvFilename, sizeof(csvFilename), "ZEPH%s%02d.csv", zephID, i);
     if (!SD.exists(csvFilename)) { break; }
   }
   csvFile = SD.open(csvFilename, FILE_WRITE);
@@ -397,10 +389,10 @@ void load_config(void) {
   DeserializationError jsonError = deserializeJson(doc, zfile);
   zfile.close();
   if (jsonError) { error("JSON CONFIG", "Unable to read json configuration."); }
-  if (!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) != 2) { error("ZEPHIRuS NAME", "Config error: 'ZEPHIRuS'"); }
+  if (!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) != 2) { error("ZEPHIRuS ID", "Config error: 'ZEPHIRuS'"); }
   if (!doc.containsKey("windSpeeds") || doc["windSpeeds"].size() != RELAY_COUNT) { error("WINDSPEEDS", "Config error: 'windSpeeds'"); }
-  zephName = doc["ZEPHIRuS"];
-  snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephName);
+  zephID = doc["ZEPHIRuS"];
+  snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephID);
   JsonArray array = doc["windSpeeds"];
   uint8_t i = 0;
   for (JsonVariant value : array) {
@@ -545,7 +537,6 @@ bool sampling_conditions(uint8_t relay) {
 
 void enable_relay(uint8_t relay) {
   samplerActive = relayPins[relay];
-  sampleCount[relay]++;
   startTime = millis();
 #if DEBUG
   Serial.printf("Sampler [%d] Active ... \n", relay + 1);
@@ -555,11 +546,11 @@ void enable_relay(uint8_t relay) {
   // RELAY ON
   digitalWrite(samplerActive, HIGH);
 #endif
+  sampleCount[relay]++;
   log_data();
 }
 
 void disable_relay(bool override) {
-  if (override) { digitalWrite(LED_GREEN, LOW); }
   sampleLength = (millis() - startTime) / 1000;
 #if DEBUG
   Serial.printf(" ... Sampling complete after %d seconds.\n", sampleLength);
@@ -569,6 +560,7 @@ void disable_relay(bool override) {
   // Relay OFF
   digitalWrite(samplerActive, LOW);
 #endif
+  if (override) { digitalWrite(LED_GREEN, LOW); }
   samplerActive = 0;
   log_data();
 }
@@ -576,19 +568,14 @@ void disable_relay(bool override) {
 void log_data(void) {
   if (samplerActive) {
     gps_gettime();
-    snprintf(msgBuf,
-             sizeof(msgBuf),
-             "%s,%.2f,%.1f,%.1f",
-             timestamp,
-             observed.windSpeed,
-             observed.windDir,
-             observed.windTemp);
+    csvFile.printf("%s,%.2f,%.1f,%.1f",
+                   timestamp,
+                   observed.windSpeed,
+                   observed.windDir,
+                   observed.windTemp);
   } else {
-    snprintf(msgBuf,
-             sizeof(msgBuf),
-             ",%d\n",
-             sampleLength);
+    csvFile.printf(",%d\n",
+                   sampleLength);
   }
-  csvFile.print(msgBuf);
   csvFile.flush();
 }
