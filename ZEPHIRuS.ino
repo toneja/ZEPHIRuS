@@ -36,7 +36,7 @@
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION 20260710  // Date last modified
+#define VERSION 20260714  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -134,6 +134,8 @@ void setup() {
 #endif
   // VBAT
   vbat_init();
+  // TRISONICA - testing
+  sonic_init();
   // RELAY
   relay_init();
   // SDCARD
@@ -152,6 +154,10 @@ void setup() {
 }
 
 void loop() {
+  // Dump Trisonica data to Serial
+#if DEBUG
+  while (Serial1.available()) { Serial.write(Serial1.read()); }
+#endif
   // Process new BLE data immediately
   if (newDataAvailable) {
     newDataAvailable = false;
@@ -340,6 +346,13 @@ bool vbat_get(void) {
   if (voltage <= MIN_VBAT) { return false; }
 #endif
   return true;
+}
+
+void sonic_init(void) {
+  Serial1.begin(115200);
+#if DEBUG
+  Serial.println("Listening for Trisonica data on Serial1.");
+#endif
 }
 
 void relay_init(void) {
