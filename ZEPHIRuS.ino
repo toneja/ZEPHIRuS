@@ -84,6 +84,7 @@ struct EnvironmentData {
 EnvironmentData observed = {};
 EnvironmentData pendingData = {};
 volatile bool newDataAvailable = false;
+float maxWindSpeed = 0;
 
 // Log files
 File csvFile;
@@ -179,6 +180,7 @@ void loop() {
       if (token == NULL || strlen(token) <= 0) { return; }
       pendingData.windTemp = atof(token);
       observed = pendingData;
+      if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
 #if DEBUG
       Serial.printf("WindSpeed: %.2f, WindDir: %.1f, WindTemp: %.1f\n", observed.windSpeed, observed.windDir, observed.windTemp);
 #endif
@@ -384,7 +386,7 @@ void sd_init(void) {
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { error("CSV FILE", "Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time,WindSpeed,WindDir,WindTemp,Length");
+    csvFile.println("Date,Time,WindSpeed,WindDir,WindTemp,MaxSpeed,Length");
     csvFile.flush();
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
@@ -571,6 +573,7 @@ void disable_relay(bool override) {
   sampleLength = (millis() - startTime) / 1000;
 #if DEBUG
   Serial.printf(" ... Sampling complete after %d seconds.\n", sampleLength);
+  Serial.printf("Max wind speed: %.2f\n", maxWindSpeed);
   // Loop LEDs
   led_loop(2);
 #else
@@ -580,6 +583,7 @@ void disable_relay(bool override) {
   if (override) { digitalWrite(LED_GREEN, LOW); }
   samplerActive = 0;
   log_data();
+  maxWindSpeed = 0;
 }
 
 void log_data(void) {
@@ -591,7 +595,8 @@ void log_data(void) {
                    observed.windDir,
                    observed.windTemp);
   } else {
-    csvFile.printf(",%d\n",
+    csvFile.printf(",%.2f,%d\n",
+                   maxWindSpeed,
                    sampleLength);
   }
   csvFile.flush();
