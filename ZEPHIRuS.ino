@@ -36,7 +36,7 @@
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION 20260715  // Date last modified
+#define VERSION 20260716  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -548,7 +548,8 @@ void relay_handler(void) {
 
 bool sampling_conditions(uint8_t relay) {
   if (relay < RELAY_COUNT - 1) {
-    return observed.windSpeed >= targeted[relay] && observed.windSpeed < targeted[relay] + 1;
+    // upper bound is the next sampling target
+    return observed.windSpeed >= targeted[relay] && observed.windSpeed < targeted[relay + 1];
   }
   // final sampler in the relay samples with no upper bound
   return observed.windSpeed >= targeted[relay];
