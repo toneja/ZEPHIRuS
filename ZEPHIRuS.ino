@@ -21,6 +21,7 @@
 *   CORE:   RAK WIRELESS 4631                                           *
 *   SDCARD: RAK WIRELESS 15002                                          *
 *   GPS:    RAK WIRELESS 12500                                          *
+*   TEMP:   RAK WIRELESS 1906                                           *
 *   RELAY:  MonkMakes MOSFETTI 4-way Switch                             *
 *   VBAT:   Generic 0-25V DC Voltage Sensor Module                      *
 *   OLED:   RAK WIRELESS 1921 (Optional)                                *
@@ -30,13 +31,15 @@
 #include <bluefruit.h>
 #include <Wire.h>
 #include <SparkFun_u-blox_GNSS_Arduino_Library.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME680.h>
 #include <Adafruit_SleepyDog.h>
 #include <ArduinoJson.h>
 #include <U8g2lib.h>
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION 20260716  // Date last modified
+#define VERSION 20260718  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -96,6 +99,9 @@ char timestamp[20];
 char gpsLoc[55];
 unsigned long lastFix = 0;
 
+// TEMPERATURE
+Adafruit_BME680 bme;
+
 // RELAY: MOSFETTI 4-way switch
 #define RELAY_COUNT 4
 #define RELAY_PIN1 WB_IO1
@@ -143,6 +149,8 @@ void setup() {
   sd_init();
   // GPS
   gps_init();
+  // TEMPERATURE
+  bme680_init();
   // BLUETOOTH
   ble_init();
   // WATCHDOG
@@ -181,6 +189,7 @@ void loop() {
       pendingData.windTemp = atof(token);
       observed = pendingData;
       if (observed.windSpeed > maxWindSpeed) { maxWindSpeed = observed.windSpeed; }
+      bme680_get();  // Onboard temperature
 #if DEBUG
       Serial.printf("WindSpeed: %.2f, WindDir: %.1f, WindTemp: %.1f\n", observed.windSpeed, observed.windDir, observed.windTemp);
 #endif
@@ -247,8 +256,10 @@ void draw_logo(uint8_t x, uint8_t y) {
 
 void oled_update() {
   u8g2.clearBuffer();
-  // Device name
-  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(bleName)) / 2, 10, bleName);
+  // Device name + Onboard temperature
+  memset(displayMsg, 0, sizeof(displayMsg));
+  snprintf(displayMsg, sizeof(displayMsg), "%s   %.1fF", bleName, (bme.temperature * 1.8) + 32);
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(displayMsg)) / 2, 10, displayMsg);
   if (Bluefruit.connected()) {
     // FW Version
     memset(displayMsg, 0, sizeof(displayMsg));
@@ -386,7 +397,7 @@ void sd_init(void) {
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { error("CSV FILE", "Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time,WindSpeed,WindDir,WindTemp,MaxSpeed,Length");
+    csvFile.println("Date,Time,Temp,WindSpeed,WindDir,WindTemp,MaxSpeed,Length");
     csvFile.flush();
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
@@ -470,6 +481,21 @@ void gps_get(void) {
   logFile.flush();
 #if DEBUG
   Serial.printf("%s\n%s\n", timestamp, gpsLoc);
+#endif
+}
+
+void bme680_init(void) {
+  if (!bme.begin(0x76)) { error("TEMP SENSOR", "BME680 not found."); }
+  bme.setTemperatureOversampling(BME680_OS_8X);
+  // save power
+  bme.setGasHeater(0, 0);
+  bme680_get();
+}
+
+void bme680_get(void) {
+  bme.performReading();
+#if DEBUG
+  Serial.printf("Onboard temperature %.1f°F\n", (bme.temperature * 1.8) + 32);
 #endif
 }
 
@@ -590,8 +616,9 @@ void disable_relay(bool override) {
 void log_data(void) {
   if (samplerActive) {
     gps_gettime();
-    csvFile.printf("%s,%.2f,%.1f,%.1f",
+    csvFile.printf("%s,%.1f,%.2f,%.1f,%.1f",
                    timestamp,
+                   (bme.temperature * 1.8) + 32,
                    observed.windSpeed,
                    observed.windDir,
                    observed.windTemp);
