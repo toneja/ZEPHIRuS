@@ -39,11 +39,10 @@
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION 20260718  // Date last modified
+#define VERSION 20260720  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
-bool displayActive;
 char displayMsg[32];
 #define EMOJI_WIDTH 8
 #define EMOJI_HEIGHT 8
@@ -157,7 +156,7 @@ void setup() {
   Watchdog.enable(10000);
   lastWatchdogPet = millis();
   // ALL CLEAR
-  if (displayActive) { oled_update(); }
+  oled_update();
   logFile.println("BOOT SUCCESSFUL.");
   logFile.flush();
 }
@@ -225,24 +224,20 @@ void sensor_init(void) {
 }
 
 void oled_init(void) {
-  if (!u8g2.begin()) {
-    displayActive = false;
-  } else {
-    displayActive = true;
-    u8g2.setContrast(0);  // Minimum brightness [0-255]
-    u8g2.setFont(u8g2_font_6x10_tf);
-    // Display the logo
-    u8g2.clearBuffer();
-    draw_logo(32, 0);
-    u8g2.sendBuffer();
-    delay(3000);
-    // Welcome message
-    u8g2.clearBuffer();
-    u8g2.drawStr(16, 15, "ZEPHIRuS SAMPLER");
-    u8g2.drawStr(16, 30, "PLEASE WAIT.....");
-    u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, smiley);
-    u8g2.sendBuffer();
-  }
+  u8g2.begin();
+  u8g2.setContrast(0);  // Minimum brightness [0-255]
+  u8g2.setFont(u8g2_font_6x10_tf);
+  // Display the logo
+  u8g2.clearBuffer();
+  draw_logo(32, 0);
+  u8g2.sendBuffer();
+  delay(3000);
+  // Welcome message
+  u8g2.clearBuffer();
+  u8g2.drawStr(16, 15, "ZEPHIRuS SAMPLER");
+  u8g2.drawStr(16, 30, "PLEASE WAIT.....");
+  u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, smiley);
+  u8g2.sendBuffer();
 }
 
 void draw_logo(uint8_t x, uint8_t y) {
@@ -319,14 +314,12 @@ void error(const char* err, const char* errMsg) {
     logFile.flush();
     logFile.close();
   }
-  if (displayActive) {
-    u8g2.clearBuffer();
-    // Center the text
-    u8g2.drawStr(46, 25, "ERROR:");
-    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(err)) / 2, 35, err);
-    u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, frowny);
-    u8g2.sendBuffer();
-  }
+  u8g2.clearBuffer();
+  // Center the text
+  u8g2.drawStr(46, 25, "ERROR:");
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(err)) / 2, 35, err);
+  u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, frowny);
+  u8g2.sendBuffer();
   while (1) {
     digitalWrite(LED_BLUE, HIGH);
     delay(333);
@@ -532,7 +525,7 @@ void connect_callback(uint16_t conn_handle) {
   connection->getPeerName(central_name, sizeof(central_name));
   Serial.printf("Connected to %s\n", central_name);
 #endif
-  if (displayActive) { oled_update(); }
+  oled_update();
 }
 
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
@@ -545,7 +538,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   observed = {};
   // Force sampler to shutdown if it is running
   if (samplerActive) { disable_relay(true); }
-  if (displayActive) { oled_update(); }
+  oled_update();
 }
 
 void bleuart_rx_callback(uint16_t conn_handle) {
@@ -569,7 +562,7 @@ void relay_handler(void) {
     }
   }
   // Refresh display data
-  if (displayActive) { oled_update(); }
+  oled_update();
 }
 
 bool sampling_conditions(uint8_t relay) {
