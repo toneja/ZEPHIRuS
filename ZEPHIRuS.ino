@@ -39,7 +39,7 @@
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION 20260720  // Date last modified
+#define VERSION 20260721  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -103,10 +103,10 @@ Adafruit_BME680 bme;
 
 // RELAY: MOSFETTI 4-way switch
 #define RELAY_COUNT 4
-#define RELAY_PIN1 WB_IO1
-#define RELAY_PIN2 WB_IO3
-#define RELAY_PIN3 WB_IO4
-#define RELAY_PIN4 WB_IO5
+#define RELAY_PIN1 WB_IO3
+#define RELAY_PIN2 WB_IO4
+#define RELAY_PIN3 WB_IO5
+#define RELAY_PIN4 28  // IO7; WB_IO7 not defined in variant.h
 const uint8_t relayPins[] = { RELAY_PIN1, RELAY_PIN2, RELAY_PIN3, RELAY_PIN4 };
 uint8_t samplerActive = 0;    // 0 = All relays OFF
 unsigned long startTime = 0;  // milliseconds
@@ -581,10 +581,9 @@ void enable_relay(uint8_t relay) {
   Serial.printf("Sampler [%d] Active ... \n", relay + 1);
   // Loop LEDs
   led_loop(2);
-#else
+#endif
   // RELAY ON
   digitalWrite(samplerActive, HIGH);
-#endif
   sampleCount[relay]++;
   log_data();
 }
@@ -596,10 +595,9 @@ void disable_relay(bool override) {
   Serial.printf("Max wind speed: %.2f\n", maxWindSpeed);
   // Loop LEDs
   led_loop(2);
-#else
+#endif
   // Relay OFF
   digitalWrite(samplerActive, LOW);
-#endif
   if (override) { digitalWrite(LED_GREEN, LOW); }
   samplerActive = 0;
   log_data();
