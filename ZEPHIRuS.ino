@@ -39,7 +39,7 @@
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION 20260721  // Date last modified
+#define VERSION 20260724  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -225,8 +225,8 @@ void sensor_init(void) {
 
 void oled_init(void) {
   u8g2.begin();
-  u8g2.setContrast(0);  // Minimum brightness [0-255]
-  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.setContrast(255);  // Brightness range [0-255]
+  u8g2.setFont(u8g2_font_9x15_tf);
   // Display the logo
   u8g2.clearBuffer();
   draw_logo(32, 0);
@@ -234,8 +234,8 @@ void oled_init(void) {
   delay(3000);
   // Welcome message
   u8g2.clearBuffer();
-  u8g2.drawStr(16, 15, "ZEPHIRuS SAMPLER");
-  u8g2.drawStr(16, 30, "PLEASE WAIT.....");
+  u8g2.drawStr(0, 15, "OSU - ZEPHIRuS");
+  u8g2.drawStr(0, 30, "PLEASE WAIT...");
   u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, smiley);
   u8g2.sendBuffer();
 }
@@ -251,33 +251,25 @@ void draw_logo(uint8_t x, uint8_t y) {
 
 void oled_update() {
   u8g2.clearBuffer();
-  // Device name + Onboard temperature
-  memset(displayMsg, 0, sizeof(displayMsg));
-  snprintf(displayMsg, sizeof(displayMsg), "%s   %.1fF", bleName, (bme.temperature * 1.8) + 32);
-  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(displayMsg)) / 2, 10, displayMsg);
   if (Bluefruit.connected()) {
-    // FW Version
+    // Onboard temperature
     memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "CENTRAL  %s", central_name);
-    u8g2.drawStr(0, 20, displayMsg);
+    snprintf(displayMsg, sizeof(displayMsg), "TEMP  %.1fF", (bme.temperature * 1.8) + 32);
+    u8g2.drawStr(0, 15, displayMsg);
     // Battery voltage
     memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "BATTERY  %.2fV", voltage);
+    snprintf(displayMsg, sizeof(displayMsg), "VBAT  %.2fV", voltage);
     u8g2.drawStr(0, 30, displayMsg);
-    // Sampler status
-    memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "SAMPLER  %s", samplerActive ? "ACTIVE" : "INACTIVE");
-    u8g2.drawStr(0, 40, displayMsg);
     // Sample count
     memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "SAMPLES  A=%d B=%d", sampleCount[0], sampleCount[1]);
-    u8g2.drawStr(0, 50, displayMsg);
+    snprintf(displayMsg, sizeof(displayMsg), "A=%d  B=%d", sampleCount[0], sampleCount[1]);
+    u8g2.drawStr(0, 45, displayMsg);
     memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "COUNTED  C=%d D=%d", sampleCount[2], sampleCount[3]);
+    snprintf(displayMsg, sizeof(displayMsg), "C=%d  D=%d", sampleCount[2], sampleCount[3]);
     u8g2.drawStr(0, 60, displayMsg);
   } else {
-    u8g2.drawStr(25, 25, "WAITING FOR A");
-    u8g2.drawStr(4, 35, "BLUETOOTH CONNECTION");
+    u8g2.drawStr(14, 30, "WAITING FOR");
+    u8g2.drawStr(23, 45, "BLUETOOTH");
   }
   u8g2.sendBuffer();
 }
@@ -316,8 +308,8 @@ void error(const char* err, const char* errMsg) {
   }
   u8g2.clearBuffer();
   // Center the text
-  u8g2.drawStr(46, 25, "ERROR:");
-  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(err)) / 2, 35, err);
+  u8g2.drawStr(37, 15, "ERROR:");
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(err)) / 2, 30, err);
   u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, frowny);
   u8g2.sendBuffer();
   while (1) {
@@ -376,7 +368,7 @@ void sd_init(void) {
   // Check if card is inserted
   pinMode(WB_IO6, INPUT_PULLUP);
   if (!digitalRead(WB_IO6) == LOW) { error("SDCARD MISSING", "No SD Card inserted."); }
-  if (!SD.begin()) { error("SDCARD FS", "Unable to mount the SD Card."); }
+  if (!SD.begin()) { error("SDCARD", "Unable to mount the SD Card."); }
 #if DEBUG
   Serial.println("SD Card mounted.");
 #endif
@@ -433,6 +425,10 @@ void gps_init(void) {
   uint16_t fixTime = 0;
 #endif
   while (g_myGNSS.getFixType() < 3) {
+    u8g2.clearBuffer();
+    u8g2.drawStr(5, 30, "SEARCHING FOR");
+    u8g2.drawStr(19, 45, "GPS SIGNAL");
+    u8g2.sendBuffer();
     digitalToggle(LED_GREEN);
     digitalToggle(LED_BLUE);
     delay(1000);
