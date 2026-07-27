@@ -119,11 +119,11 @@ unsigned long lastWatchdogPet = 0;
 
 // VBAT: monitor battery voltage
 #define ANALOG_PIN1 WB_A1  // AIN1 pin
-#define MIN_VBAT 10.5
+#define MIN_VBAT 10.0
 #define MAX_COUNTS 4095.0  // 12-bits
 #define MAX_VINPUT 3.0
 #define DIVIDER_RATIO 5.0
-uint16_t voltMagic = MAX_COUNTS / MAX_VINPUT / DIVIDER_RATIO;
+float voltMagic = MAX_COUNTS / MAX_VINPUT / DIVIDER_RATIO;
 float voltage;
 
 void setup() {
