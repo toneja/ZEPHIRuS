@@ -422,11 +422,11 @@ void gps_init(void) {
   Serial.print("Searching for GPS...");
   uint16_t fixTime = 0;
 #endif
+  u8g2.clearBuffer();
+  u8g2.drawStr(5, 30, "SEARCHING FOR");
+  u8g2.drawStr(19, 45, "GPS SIGNAL");
+  u8g2.sendBuffer();
   while (g_myGNSS.getFixType() < 3) {
-    u8g2.clearBuffer();
-    u8g2.drawStr(5, 30, "SEARCHING FOR");
-    u8g2.drawStr(19, 45, "GPS SIGNAL");
-    u8g2.sendBuffer();
     digitalToggle(LED_GREEN);
     digitalToggle(LED_BLUE);
     delay(1000);
