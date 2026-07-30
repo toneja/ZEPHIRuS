@@ -39,7 +39,7 @@
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION 20260729  // Date last modified
+#define VERSION "20260730"  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -321,7 +321,7 @@ void serial_init(void) {
   Serial.begin(115200);
   delay(2000);
   // while (!Serial) { delay(100); }
-  Serial.printf("ZEPHIRuS - SAMPLER VERSION %d\n", VERSION);
+  Serial.printf("ZEPHIRuS - SAMPLER VERSION %s\n", VERSION);
 }
 #endif
 
@@ -417,7 +417,7 @@ void sd_init(void) {
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
   if (!logFile) { error("LOG FILE", "Unable to create LOG file."); }
   logFile.printf("==========================================\n");
-  logFile.printf("%s VERSION %d\nBattery voltage: %.2f\n", bleName, VERSION, voltage);
+  logFile.printf("%s VERSION %s\nBattery voltage: %.2f\n", bleName, VERSION, voltage);
   logFile.printf("Targeted wind speeds: %d, %d, %d, %d m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
   logFile.flush();
 }
@@ -527,8 +527,10 @@ void ble_init(void) {
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
   bleuart.setRxCallback(bleuart_rx_callback);
   // Device Info
-  bledis.setManufacturer("Mahaffee Lab");
-  bledis.setModel(bleName);
+  bledis.setModel("ZEPHIRuS Sampler");
+  bledis.setSerialNum(bleName);
+  bledis.setFirmwareRev(VERSION);
+  bledis.setManufacturer("OSU - Botany & Plant Pathology");
   bledis.begin();
   bleuart.begin();
   startAdv();
