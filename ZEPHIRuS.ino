@@ -39,11 +39,12 @@
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION 20260724  // Date last modified
+#define VERSION 20260729  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
 char displayMsg[32];
+bool displayActive;
 #define EMOJI_WIDTH 8
 #define EMOJI_HEIGHT 8
 const unsigned char smiley[] PROGMEM = {
@@ -66,6 +67,10 @@ const unsigned char frowny[] PROGMEM = {
   0x42,
   0x3C
 };
+
+// BUTTON/SWITCH
+unsigned long lastDebounceTime = 0;
+const unsigned long DEBOUNCE_DELAY = 50;  // milliseconds
 
 // BLUETOOTH
 BLEDis bledis;
@@ -129,6 +134,8 @@ float voltage;
 void setup() {
   // I2C
   sensor_init();
+  // BUTTON/SWITCH
+  button_init();
   // DISPLAY
   oled_init();
   // LEDs
@@ -221,10 +228,31 @@ void sensor_init(void) {
   delay(1000);  // give em a sec to wake up
 }
 
+void button_init(void) {
+  // logic for using a switch, not a push button
+  pinMode(WB_SW1, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(WB_SW1), onButtonPress, CHANGE);
+  // Switch position sets diplay behavior
+  displayActive = digitalRead(WB_SW1);
+}
+
+void onButtonPress(void) {
+#if DEBUG
+  Serial.printf("User button pressed: turning display %s\n", displayActive ? "OFF" : "ON");
+#endif
+  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
+    lastDebounceTime = millis();
+    u8g2.setPowerSave(displayActive);  // reversed logic
+    if (displayActive) { oled_update(); }
+    displayActive = !displayActive;
+  }
+}
+
 void oled_init(void) {
   u8g2.begin();
   u8g2.setContrast(255);  // Brightness range [0-255]
   u8g2.setFont(u8g2_font_9x15_tf);
+  if (!displayActive) { return; }
   // Display the logo
   u8g2.clearBuffer();
   draw_logo(32, 0);
@@ -248,6 +276,7 @@ void draw_logo(uint8_t x, uint8_t y) {
 }
 
 void oled_update() {
+  if (!displayActive) { return; }
   u8g2.clearBuffer();
   if (Bluefruit.connected()) {
     // Onboard temperature
@@ -304,12 +333,14 @@ void error(const char* err, const char* errMsg) {
     logFile.flush();
     logFile.close();
   }
-  u8g2.clearBuffer();
-  // Center the text
-  u8g2.drawStr(37, 15, "ERROR:");
-  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(err)) / 2, 30, err);
-  u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, frowny);
-  u8g2.sendBuffer();
+  if (displayActive) {
+    u8g2.clearBuffer();
+    // Center the text
+    u8g2.drawStr(37, 15, "ERROR:");
+    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(err)) / 2, 30, err);
+    u8g2.drawXBM(60, 45, EMOJI_WIDTH, EMOJI_HEIGHT, frowny);
+    u8g2.sendBuffer();
+  }
   while (1) {
     digitalWrite(LED_BLUE, HIGH);
     delay(333);
@@ -422,10 +453,12 @@ void gps_init(void) {
   Serial.print("Searching for GPS...");
   uint16_t fixTime = 0;
 #endif
-  u8g2.clearBuffer();
-  u8g2.drawStr(5, 30, "SEARCHING FOR");
-  u8g2.drawStr(19, 45, "GPS SIGNAL");
-  u8g2.sendBuffer();
+  if (displayActive) {
+    u8g2.clearBuffer();
+    u8g2.drawStr(5, 30, "SEARCHING FOR");
+    u8g2.drawStr(19, 45, "GPS SIGNAL");
+    u8g2.sendBuffer();
+  }
   while (g_myGNSS.getFixType() < 3) {
     digitalToggle(LED_GREEN);
     digitalToggle(LED_BLUE);
