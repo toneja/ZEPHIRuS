@@ -39,7 +39,8 @@
 #include "SD.h"
 
 #define DEBUG 1
-#define VERSION "20260730"  // Date last modified
+#define TRISONICA 0         // Use Trisonica anemometer connected to Serial1
+#define VERSION "20260818"  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -77,11 +78,16 @@ BLEDis bledis;
 BLEUart bleuart;
 char bleName[12];
 const char* zephID;
-#define BLE_BUF_SIZE 20  // default BLEUart packet size
-char bleMsg[BLE_BUF_SIZE];
-char central_name[32];
 
-// BLEUart Sensor Data
+// Sensor Data
+#if TRISONICA
+#define ENV_BUF_SIZE 64  // Serial buffer
+unsigned long lastPollingTime = 0;
+const unsigned long MAX_POLLING_INTERVAL = 5000;  // milliseconds
+#else
+#define ENV_BUF_SIZE 20  // default BLEUART packet size
+#endif
+char envMsg[ENV_BUF_SIZE];
 struct EnvironmentData {
   float windSpeed;
   float windDir;
@@ -146,8 +152,6 @@ void setup() {
 #endif
   // VBAT
   vbat_init();
-  // TRISONICA - testing
-  sonic_init();
   // RELAY
   relay_init();
   // SDCARD
@@ -156,8 +160,13 @@ void setup() {
   gps_init();
   // TEMPERATURE
   bme680_init();
+#if TRISONICA
+  // TRISONICA
+  trisonica_init();
+#else
   // BLUETOOTH
   ble_init();
+#endif
   // WATCHDOG
   Watchdog.enable(10000);
   lastWatchdogPet = millis();
@@ -165,23 +174,25 @@ void setup() {
   oled_update();
   logFile.println("BOOT SUCCESSFUL.");
   logFile.flush();
+#if TRISONICA
+  while (Serial1.available()) { Serial1.read(); }  // flush Serial1 buffer
+#endif
 }
 
 void loop() {
-  // Dump Trisonica data to Serial
-#if DEBUG
-  while (Serial1.available()) { Serial.write(Serial1.read()); }
+#if TRISONICA
+  trisonica_get();
 #endif
-  // Process new BLE data immediately
+  // Process new sensor data immediately
   if (newDataAvailable) {
     newDataAvailable = false;
     // Check battery level before activating sampler
     if (vbat_get()) {
-      // Flash green LED while handling BLEUart data
+      // Flash green LED while handling sensor data
       digitalWrite(LED_GREEN, HIGH);
       // Make a copy to avoid strtok corruption issues
-      char msgCopy[BLE_BUF_SIZE];
-      strncpy(msgCopy, bleMsg, sizeof(msgCopy) - 1);
+      char msgCopy[ENV_BUF_SIZE];
+      strncpy(msgCopy, envMsg, sizeof(msgCopy) - 1);
       char* token;
       token = strtok(msgCopy, ",");
       if (token == NULL || strlen(token) <= 0) { return; }
@@ -278,7 +289,11 @@ void draw_logo(uint8_t x, uint8_t y) {
 void oled_update() {
   if (!displayActive) { return; }
   u8g2.clearBuffer();
+#if TRISONICA
+  if ((millis() - lastPollingTime) < MAX_POLLING_INTERVAL) {  // Serial data being received at least every 5 seconds
+#else
   if (Bluefruit.connected()) {
+#endif
     // Onboard temperature
     memset(displayMsg, 0, sizeof(displayMsg));
     snprintf(displayMsg, sizeof(displayMsg), "TEMP  %.1fF", (bme.temperature * 1.8) + 32);
@@ -296,7 +311,13 @@ void oled_update() {
     u8g2.drawStr(0, 60, displayMsg);
   } else {
     u8g2.drawStr(14, 30, "WAITING FOR");
-    u8g2.drawStr(23, 45, "BLUETOOTH");
+    u8g2.drawStr(23, 45,
+#if TRISONICA
+                 "TRISONICA"
+#else
+                 "BLUETOOTH"
+#endif
+    );
   }
   u8g2.sendBuffer();
 }
@@ -373,13 +394,6 @@ bool vbat_get(void) {
   if (voltage <= MIN_VBAT) { return false; }
 #endif
   return true;
-}
-
-void sonic_init(void) {
-  Serial1.begin(115200);
-#if DEBUG
-  Serial.println("Listening for Trisonica data on Serial1.");
-#endif
 }
 
 void relay_init(void) {
@@ -519,6 +533,35 @@ void bme680_get(void) {
 #endif
 }
 
+#if TRISONICA
+void trisonica_init(void) {
+  Serial1.begin(115200);
+#if DEBUG
+  Serial.println("Listening for Trisonica data on Serial1.");
+#endif
+}
+
+void trisonica_get(void) {
+  // Use Trisonica data instead of BLEUART
+  if (Serial1.available()) {
+    memset(envMsg, 0, ENV_BUF_SIZE);  // clear the msg buffer
+    int len = Serial1.readBytesUntil('\n', envMsg, ENV_BUF_SIZE);
+    envMsg[len] = '\0';
+    newDataAvailable = true;
+    lastPollingTime = millis();
+  } else {
+    // Update Display if it has been more than 5 seconds since the last reading
+    if ((millis() - lastPollingTime) > MAX_POLLING_INTERVAL) {
+      if (samplerActive) { disable_relay(true); }
+      oled_update();
+    }
+  }
+#if DEBUG
+  // Send API commands from Serial to the sensor
+  while (Serial.available()) { Serial1.print(Serial.read()); }
+#endif
+}
+#else
 void ble_init(void) {
   Bluefruit.begin(1, 0);
   Bluefruit.setTxPower(4);  // Check bluefruit.h for supported values
@@ -550,6 +593,7 @@ void startAdv(void) {
 void connect_callback(uint16_t conn_handle) {
 #if DEBUG
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
+  char central_name[32];
   memset(central_name, 0, sizeof(central_name));
   connection->getPeerName(central_name, sizeof(central_name));
   Serial.printf("Connected to %s\n", central_name);
@@ -574,12 +618,13 @@ void bleuart_rx_callback(uint16_t conn_handle) {
   // Read BLEUart data
   uint8_t len = bleuart.available();
   if (len < 0) { return; }
-  memset(bleMsg, 0, BLE_BUF_SIZE);  // clear the msg buffer
+  memset(envMsg, 0, ENV_BUF_SIZE);  // clear the msg buffer
   uint8_t i = 0;
-  while (bleuart.available()) { bleMsg[i++] = bleuart.read(); }
-  bleMsg[len] = '\0';
+  while (bleuart.available()) { envMsg[i++] = bleuart.read(); }
+  envMsg[len] = '\0';
   newDataAvailable = true;
 }
+#endif
 
 void relay_handler(void) {
   for (uint8_t relay = 0; relay < RELAY_COUNT; relay++) {
