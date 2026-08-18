@@ -211,10 +211,7 @@ void loop() {
       // Handle relay and perform all I/O here
       relay_handler();
       // LED off, when sampler inactive
-      if (!samplerActive) {
-        delay(50);
-        digitalWrite(LED_GREEN, LOW);
-      }
+      if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
     } else {
       // Force sampler to shutdown if it is running
       if (samplerActive) { disable_relay(true); }
