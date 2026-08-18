@@ -477,7 +477,7 @@ void gps_init(void) {
 #if DEBUG
     Serial.print(".");
     fixTime++;
-    if (fixTime == 30) { break; }  // don't loop forever
+    if (fixTime == 10) { break; }  // don't loop forever
 #endif
   }
   // make sure LEDs are off
