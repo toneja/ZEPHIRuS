@@ -122,7 +122,7 @@ uint8_t samplerActive = 0;    // 0 = All relays OFF
 unsigned long startTime = 0;  // milliseconds
 uint16_t sampleLength = 0;    // seconds
 uint16_t sampleCount[RELAY_COUNT] = {};
-uint8_t targeted[RELAY_COUNT] = {};
+float targeted[RELAY_COUNT] = {};
 
 // WATCHDOG: Non-blocking timer
 unsigned long lastWatchdogPet = 0;
@@ -429,7 +429,7 @@ void sd_init(void) {
   if (!logFile) { error("LOG FILE", "Unable to create LOG file."); }
   logFile.printf("==========================================\n");
   logFile.printf("%s VERSION %s\nBattery voltage: %.2f\n", bleName, VERSION, voltage);
-  logFile.printf("Targeted wind speeds: %d, %d, %d, %d m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
+  logFile.printf("Targeted wind speeds: %.2f, %.2f, %.2f, %.2f m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
   logFile.flush();
 }
 
@@ -447,9 +447,9 @@ void load_config(void) {
   JsonArray array = doc["windSpeeds"];
   uint8_t i = 0;
   for (JsonVariant value : array) {
-    targeted[i] = value.as<int>();
+    targeted[i] = value.as<float>();
 #if DEBUG
-    Serial.printf("Targeted wind speed [%d]: %d m/s\n", i + 1, targeted[i]);
+    Serial.printf("Targeted wind speed [%d]: %.2f m/s\n", i + 1, targeted[i]);
 #endif
     i++;
   }
