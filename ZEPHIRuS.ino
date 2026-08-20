@@ -40,7 +40,7 @@
 
 #define DEBUG 1
 #define TRISONICA 0         // Use Trisonica anemometer connected to Serial1
-#define VERSION "20260818"  // Date last modified
+#define VERSION "20260820"  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -101,6 +101,7 @@ volatile bool newDataAvailable = false;
 // Log files
 File csvFile;
 File logFile;
+File sncFile;
 
 // GPS: position + timestamp
 SFE_UBLOX_GNSS g_myGNSS;
@@ -212,6 +213,15 @@ void loop() {
       relay_handler();
       // LED off, when sampler inactive
       if (!samplerActive) { digitalWrite(LED_GREEN, LOW); }
+      // Write sonic data to output file
+      gps_gettime();
+      sncFile.printf("%s,%.1f,%.2f,%.1f,%.1f\n",
+                     timestamp,
+                     (bme.temperature * 1.8) + 32,
+                     observed.windSpeed,
+                     observed.windDir,
+                     observed.windTemp);
+      sncFile.flush();
     } else {
       // Force sampler to shutdown if it is running
       if (samplerActive) { disable_relay(true); }
@@ -422,15 +432,26 @@ void sd_init(void) {
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { error("CSV FILE", "Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time,Temp,WindSpeed,WindDir,WindTemp,Length");
+    csvFile.println("Date,Time,WindSpeed,WindDir,WindTemp,Length");
     csvFile.flush();
   }
-  logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
+  logFile = SD.open("ZEPH_LOG.txt", FILE_WRITE);
   if (!logFile) { error("LOG FILE", "Unable to create LOG file."); }
   logFile.printf("==========================================\n");
   logFile.printf("%s VERSION %s\nBattery voltage: %.2f\n", bleName, VERSION, voltage);
   logFile.printf("Targeted wind speeds: %.2f, %.2f, %.2f, %.2f m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
   logFile.flush();
+  char sncFilename[12 + 1];
+  for (uint8_t i = 0; i <= 99; i++) {
+    snprintf(sncFilename, sizeof(sncFilename), "ZDAT%s%02d.csv", zephID, i);
+    if (!SD.exists(sncFilename)) { break; }
+  }
+  sncFile = SD.open(sncFilename, FILE_WRITE);
+  if (!sncFile) { error("SNC FILE", "Unable to create SNC file."); }
+  if (sncFile.size() == 0) {
+    sncFile.println("Date,Time,Temp,WindSpeed,WindDir,WindTemp");
+    sncFile.flush();
+  }
 }
 
 void load_config(void) {
@@ -672,9 +693,8 @@ void disable_relay(bool override) {
 void log_data(void) {
   if (samplerActive) {
     gps_gettime();
-    csvFile.printf("%s,%.1f,%.2f,%.1f,%.1f",
+    csvFile.printf("%s,%.2f,%.1f,%.1f",
                    timestamp,
-                   (bme.temperature * 1.8) + 32,
                    observed.windSpeed,
                    observed.windDir,
                    observed.windTemp);
