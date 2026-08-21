@@ -576,7 +576,12 @@ void trisonica_get(void) {
   }
 #if DEBUG
   // Send API commands from Serial to the sensor
-  while (Serial.available()) { Serial1.print(Serial.read()); }
+  if (Serial.available()) {
+    char sncMsg[32];
+    int len = Serial.readBytesUntil('\n', sncMsg, 32);
+    sncMsg[len] = '\0';
+    Serial1.print(sncMsg);
+  }
 #endif
 }
 #else
