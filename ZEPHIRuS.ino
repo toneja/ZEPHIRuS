@@ -70,8 +70,8 @@ const unsigned char frowny[] PROGMEM = {
 };
 
 // BUTTON/SWITCH
-unsigned long lastDebounceTime = 0;
-const unsigned long DEBOUNCE_DELAY = 50;  // milliseconds
+#define DEBOUNCE_DELAY 50  // milliseconds
+time_t lastDebounceTime = 0;
 
 // BLUETOOTH
 BLEDis bledis;
@@ -81,9 +81,9 @@ const char* zephID;
 
 // Sensor Data
 #if TRISONICA
-#define ENV_BUF_SIZE 64  // Serial buffer
-unsigned long lastPollingTime = 0;
-const unsigned long MAX_POLLING_INTERVAL = 5000;  // milliseconds
+#define ENV_BUF_SIZE 64            // Serial buffer
+#define MAX_POLLING_INTERVAL 5000  // milliseconds
+time_t lastPollingTime = 0;
 #else
 #define ENV_BUF_SIZE 20  // default BLEUART packet size
 #endif
@@ -107,7 +107,7 @@ File sncFile;
 SFE_UBLOX_GNSS g_myGNSS;
 char timestamp[20];
 char gpsLoc[55];
-unsigned long lastFix = 0;
+time_t lastFix = 0;
 
 // TEMPERATURE
 Adafruit_BME680 bme;
@@ -119,15 +119,15 @@ Adafruit_BME680 bme;
 #define RELAY_PIN3 WB_IO5
 #define RELAY_PIN4 28  // IO7; WB_IO7 not defined in variant.h
 const uint8_t relayPins[] = { RELAY_PIN1, RELAY_PIN2, RELAY_PIN3, RELAY_PIN4 };
-uint8_t samplerActive = 0;    // 0 = All relays OFF
-unsigned long startTime = 0;  // milliseconds
-uint16_t sampleLength = 0;    // seconds
+uint8_t samplerActive = 0;  // 0 = All relays OFF
+time_t startTime = 0;       // milliseconds
+uint16_t sampleLength = 0;  // seconds
 uint16_t sampleCount[RELAY_COUNT] = {};
 float targeted[RELAY_COUNT] = {};
 
 // WATCHDOG: Non-blocking timer
-unsigned long lastWatchdogPet = 0;
 #define WATCHDOG_INTERVAL 5000
+time_t lastWatchdogPet = 0;
 
 // VBAT: monitor battery voltage
 #define ANALOG_PIN1 WB_A1  // AIN1 pin
@@ -228,7 +228,7 @@ void loop() {
     }
   }
   // Only pet watchdog if 5 seconds have elapsed
-  unsigned long now = millis();
+  time_t now = millis();
   if (now - lastWatchdogPet >= WATCHDOG_INTERVAL) {
     Watchdog.reset();
     lastWatchdogPet = now;
