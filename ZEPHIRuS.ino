@@ -38,9 +38,9 @@
 #include <U8g2lib.h>
 #include "SD.h"
 
-#define DEBUG 1
+#define DEBUG 0
 #define TRISONICA 0         // Use Trisonica anemometer connected to Serial1
-#define VERSION "20260902"  // Date last modified
+#define VERSION "20260911"  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
