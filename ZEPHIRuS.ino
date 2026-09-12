@@ -422,7 +422,7 @@ void sd_init(void) {
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { error("CSV FILE", "Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time,Temp,WindSpeed,WindDir,WindTemp,Length");
+    csvFile.println("Date,Time(UTC),Temp(F),WindSpeed(m/s),WindDir,WindTemp(C),Length(s)");
     csvFile.flush();
   }
   logFile = SD.open("ZEPH_LOG.txt", FILE_WRITE);

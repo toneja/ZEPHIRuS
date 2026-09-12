@@ -71,7 +71,7 @@ When conditions change from one bin to another, the current relay is turned off 
 - Log file: `ZEPH_LOG.txt` (boot, status, and GPS coordinate logs)
 
 CSV header (created on new file):
-Date,Time,Temp,WindSpeed,WindDir,WindTemp,Length
+Date,Time(UTC),Temp(F),WindSpeed(m/s),WindDir,WindTemp(C),Length(s)
 
 Notes:
 - The firmware writes a timestamp that includes a comma between date and time (so Date and Time are separate CSV columns).
