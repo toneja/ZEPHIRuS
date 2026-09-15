@@ -29,11 +29,13 @@ Key features:
 ## Configuration (zconfig.txt)
 At startup the firmware reads `zconfig.txt` from the SD card and validates it. Required JSON keys:
 - "ZEPHIRuS": two-character device ID string (e.g., "AA")
+- "Pathogen": pathogen name string (e.g., "Erysiphe Necator")
 - "windSpeeds": array of 4 numeric values (one per relay)
 
 Example:
 {
   "ZEPHIRuS": "AA",
+  "Pathogen": "Erysiphe Necator",
   "windSpeeds": [1.0, 2.0, 3.0, 4.0]
 }
 
