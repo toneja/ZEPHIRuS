@@ -40,7 +40,7 @@
 
 #define DEBUG 0
 #define TRISONICA 0         // Use Trisonica anemometer connected to Serial1
-#define VERSION "20260911"  // Date last modified
+#define VERSION "20260914"  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -77,7 +77,8 @@ time_t lastDebounceTime = 0;
 BLEDis bledis;
 BLEUart bleuart;
 char bleName[12];
-const char* zephID;
+char pathogenName[32];
+char zephID[2];
 
 // Sensor Data
 #if TRISONICA
@@ -430,6 +431,7 @@ void sd_init(void) {
   logFile.printf("==========================================\n");
   logFile.printf("%s VERSION %s\nBattery voltage: %.2f\n", bleName, VERSION, voltage);
   logFile.printf("Targeted wind speeds: %.2f, %.2f, %.2f, %.2f m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
+  logFile.printf("Targeted pathogen: %s\n", pathogenName);
   logFile.flush();
 }
 
@@ -441,18 +443,21 @@ void load_config(void) {
   zfile.close();
   if (jsonError) { error("JSON CONFIG", "Unable to read json configuration."); }
   if (!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) != 2) { error("ZEPHIRuS ID", "Config error: 'ZEPHIRuS'"); }
+  if (!doc.containsKey("Pathogen")) { error("Pathogen ID", "Config error: 'Pathogen'"); }
   if (!doc.containsKey("windSpeeds") || doc["windSpeeds"].size() != RELAY_COUNT) { error("WINDSPEEDS", "Config error: 'windSpeeds'"); }
-  zephID = doc["ZEPHIRuS"];
+  snprintf(zephID, sizeof(zephID), "%s", doc["ZEPHIRuS"]);
   snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephID);
+  snprintf(pathogenName, sizeof(pathogenName), "%s", doc["Pathogen"]);
   JsonArray array = doc["windSpeeds"];
   uint8_t i = 0;
   for (JsonVariant value : array) {
     targeted[i] = value.as<float>();
-#if DEBUG
-    Serial.printf("Targeted wind speed [%d]: %.2f m/s\n", i + 1, targeted[i]);
-#endif
     i++;
   }
+#if DEBUG
+  Serial.printf("Targeted wind speeds: %.2f, %.2f, %.2f, %.2f m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
+  Serial.printf("Targeted pathogen: %s", pathogenName);
+#endif
 }
 
 void gps_init(void) {
