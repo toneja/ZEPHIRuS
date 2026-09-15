@@ -28,15 +28,17 @@
 *   IO:     RAK WIRELESS 13002 (Optional)                               *
 ************************************************************************/
 
+// Board Manager index:
+// https://raw.githubusercontent.com/RAKwireless/RAKwireless-Arduino-BSP-Index/main/package_rakwireless_index.json
 #include <bluefruit.h>
 #include <Wire.h>
-#include <SparkFun_u-blox_GNSS_Arduino_Library.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME680.h>
-#include <Adafruit_SleepyDog.h>
-#include <ArduinoJson.h>
-#include <U8g2lib.h>
-#include "SD.h"
+#include <SparkFun_u-blox_GNSS_Arduino_Library.h>  // http://librarymanager/All#SparkFun%20u-blox%20GNSS
+#include <Adafruit_Sensor.h>                       // http://librarymanager/All#Adafruit%20Unified%20Sensor
+#include <Adafruit_BME680.h>                       // http://librarymanager/All#Adafruit%20BME680%20Library
+#include <Adafruit_SleepyDog.h>                    // http://librarymanager/All#Adafruit%20SleepyDog%20Library
+#include <ArduinoJson.h>                           // http://librarymanager/All#ArduinoJson
+#include <U8g2lib.h>                               // http://librarymanager/All#U8g2
+#include "SD.h"                                    // http://librarymanager/All#SD
 
 #define DEBUG 0
 #define TRISONICA 0         // Use Trisonica anemometer connected to Serial1
