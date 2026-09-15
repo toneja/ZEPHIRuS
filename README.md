@@ -28,18 +28,18 @@ Key features:
 
 ## Configuration (zconfig.txt)
 At startup the firmware reads `zconfig.txt` from the SD card and validates it. Required JSON keys:
-- "ZEPHIRuS": two-character device ID string (e.g., "AA")
-- "Pathogen": pathogen name string (e.g., "Erysiphe Necator")
+- "ZEPHIRuS": device ID string, up to 4 characters (e.g., "BPP1")
+- "Pathogen": pathogen name string, up to 32 characters (e.g., "Erysiphe Necator")
 - "windSpeeds": array of 4 numeric values (one per relay)
 
 Example:
 {
-  "ZEPHIRuS": "AA",
+  "ZEPHIRuS": "BPP1",
   "Pathogen": "Erysiphe Necator",
   "windSpeeds": [1.0, 2.0, 3.0, 4.0]
 }
 
-The device name advertised over BLE is `ZEPHIRuS-<ID>` (for ID "AA" this becomes `ZEPHIRuS-AA`).
+The device name advertised over BLE is `ZEPHIRuS-<ID>` (for ID "BPP1" this becomes `ZEPHIRuS-BPP1`).
 
 ## BLE / External-input format
 - Service: BLE UART (Nordic UART via Bluefruit)
@@ -68,9 +68,9 @@ Example with windSpeeds = [1.0, 2.0, 3.0, 4.0]:
 When conditions change from one bin to another, the current relay is turned off and the new relay (if any) is enabled. The firmware tracks per-relay sample counts and the duration (seconds) of each sampling event.
 
 ## Files on SD card
-- CSV files: named `ZEPH<id><NN>.csv` where `<id>` is the two-character ZEPHIRuS ID and `NN` is 00-99.
-  Example: `ZEPHAA00.csv`
-- Log file: `ZEPH_LOG.txt` (boot, status, and GPS coordinate logs)
+- CSV files: named `Z<id>_<NN>.csv` where `<id>` is the ZEPHIRuS ID string and `NN` is 00-99.
+  Example: `ZBPP1_00.csv`
+- Log file: `ZEPHIRUS.txt` (boot, status, and GPS coordinate logs)
 
 CSV header (created on new file):
 Date,Time(UTC),Temp(F),WindSpeed(m/s),WindDir,WindTemp(C),Length(s)
@@ -81,7 +81,7 @@ Notes:
 
 ## GPS / Timestamping
 - GPS is used to provide timestamps in the format `YYYY-MM-DD,HH:MM:SS`.
-- The firmware logs coordinates and timestamps to ZEPH_LOG.txt; it also refreshes the GPS timestamp used in CSV rows.
+- The firmware logs coordinates and timestamps to ZEPHIRUS.txt; it also refreshes the GPS timestamp used in CSV rows.
 - The firmware attempts to get a 3D fix at startup (with a short break-out to avoid blocking indefinitely when DEBUG is enabled).
 
 ## Battery monitoring

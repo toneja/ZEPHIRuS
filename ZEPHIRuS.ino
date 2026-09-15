@@ -42,7 +42,7 @@
 
 #define DEBUG 0
 #define TRISONICA 0         // Use Trisonica anemometer connected to Serial1
-#define VERSION "20260914"  // Date last modified
+#define VERSION "20260915"  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -78,9 +78,9 @@ time_t lastDebounceTime = 0;
 // BLUETOOTH
 BLEDis bledis;
 BLEUart bleuart;
-char bleName[12];
+char bleName[14];
 char pathogenName[32];
-char zephID[2];
+char zephID[5];
 
 // Sensor Data
 #if TRISONICA
@@ -419,21 +419,25 @@ void sd_init(void) {
   load_config();
   char csvFilename[12 + 1];
   for (uint8_t i = 0; i <= 99; i++) {
-    snprintf(csvFilename, sizeof(csvFilename), "ZEPH%s%02d.csv", zephID, i);
+    snprintf(csvFilename, sizeof(csvFilename), "Z%s_%02d.csv", zephID, i);
     if (!SD.exists(csvFilename)) { break; }
   }
+#if DEBUG
+  Serial.printf("Output file: %s\n", csvFilename);
+#endif
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { error("CSV FILE", "Unable to create CSV file."); }
   if (csvFile.size() == 0) {
     csvFile.println("Date,Time(UTC),Temp(F),WindSpeed(m/s),WindDir,WindTemp(C),Length(s)");
     csvFile.flush();
   }
-  logFile = SD.open("ZEPH_LOG.txt", FILE_WRITE);
-  if (!logFile) { error("LOG FILE", "Unable to create LOG file."); }
+  logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
+  if (!logFile) { error("LOG FILE", "Unable to create TXT file."); }
   logFile.printf("==========================================\n");
   logFile.printf("%s VERSION %s\nBattery voltage: %.2f\n", bleName, VERSION, voltage);
   logFile.printf("Targeted wind speeds: %.2f, %.2f, %.2f, %.2f m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
   logFile.printf("Targeted pathogen: %s\n", pathogenName);
+  logFile.printf("Output file: %s\n", csvFilename);
   logFile.flush();
 }
 
@@ -444,12 +448,14 @@ void load_config(void) {
   DeserializationError jsonError = deserializeJson(doc, zfile);
   zfile.close();
   if (jsonError) { error("JSON CONFIG", "Unable to read json configuration."); }
-  if (!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) != 2) { error("ZEPHIRuS ID", "Config error: 'ZEPHIRuS'"); }
-  if (!doc.containsKey("Pathogen")) { error("Pathogen ID", "Config error: 'Pathogen'"); }
+  if (!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) > 4) { error("ZEPHIRuS ID", "Config error: 'ZEPHIRuS'"); }
+  if (!doc.containsKey("Pathogen") || strlen(doc["Pathogen"]) > 32) { error("Pathogen ID", "Config error: 'Pathogen'"); }
   if (!doc.containsKey("windSpeeds") || doc["windSpeeds"].size() != RELAY_COUNT) { error("WINDSPEEDS", "Config error: 'windSpeeds'"); }
-  snprintf(zephID, sizeof(zephID), "%s", doc["ZEPHIRuS"]);
+  strncpy(zephID, doc["ZEPHIRuS"], sizeof(zephID) - 1);
+  zephID[sizeof(zephID) - 1] = '\0';
   snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephID);
-  snprintf(pathogenName, sizeof(pathogenName), "%s", doc["Pathogen"]);
+  strncpy(pathogenName, doc["Pathogen"], sizeof(pathogenName) - 1);
+  pathogenName[sizeof(pathogenName) - 1] = '\0';
   JsonArray array = doc["windSpeeds"];
   uint8_t i = 0;
   for (JsonVariant value : array) {
@@ -458,7 +464,7 @@ void load_config(void) {
   }
 #if DEBUG
   Serial.printf("Targeted wind speeds: %.2f, %.2f, %.2f, %.2f m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
-  Serial.printf("Targeted pathogen: %s", pathogenName);
+  Serial.printf("Targeted pathogen: %s\n", pathogenName);
 #endif
 }
 
