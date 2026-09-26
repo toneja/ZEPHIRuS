@@ -33,19 +33,21 @@ At startup the firmware reads `zconfig.txt` from the SD card and validates it. R
 - "windSpeeds": array of 4 numeric values (one per relay)
 
 Example:
+```json
 {
   "ZEPHIRuS": "BPP1",
   "Pathogen": "Erysiphe Necator",
   "windSpeeds": [1.0, 2.0, 3.0, 4.0]
 }
+```
 
 The device name advertised over BLE is `ZEPHIRuS-<ID>` (for ID "BPP1" this becomes `ZEPHIRuS-BPP1`).
 
 ## BLE / External-input format
 - Service: BLE UART (Nordic UART via Bluefruit)
 - Expected payload (BLE UART or Serial1 for TRISONICA mode) is a comma-separated line with three numeric values:
-  windSpeed,windDir,windTemp
-  Example: `3.25,180.0,22.8`
+  `windSpeed,windDir,windTemp`
+  - Example: `3.25,180.0,22.8`
 - The firmware parses tokens with simple strtok/atof, so avoid extra spaces or missing fields.
 
 Packet size: the firmware uses a small buffer (ENV_BUF_SIZE) — BLE mode defaults to 20 bytes.
@@ -73,11 +75,32 @@ When conditions change from one bin to another, the current relay is turned off 
 - Log file: `ZEPHIRUS.txt` (boot, status, and GPS coordinate logs)
 
 CSV header (created on new file):
+```text
 Date,Time(UTC),Temp(F),WindSpeed(m/s),WindDir,WindTemp(C),Length(s)
+```
 
 Notes:
 - The firmware writes a timestamp that includes a comma between date and time (so Date and Time are separate CSV columns).
 - When a sampling event begins the firmware writes a row with timestamp, onboard temperature (°F), and the external wind values. When the sampling event ends it appends the sample length (seconds) in the Length column.
+
+## Runtime analysis utility
+`zephData.py` summarizes a ZEPHIRuS CSV log by wind-speed bin. It counts samples and adds the recorded sampling durations for each bin, then prints a tabulated report and the total runtime.
+
+The utility expects a CSV file containing the output from the ZEPHIRuS firmware. Adjust the BINS variable for your targeted wind speeds by matching the `windSpeeds` list in your `zconfig.txt`.
+
+Run it from the repository root with Python 3:
+
+```bash
+python3 zephData.py path/to/ZBPP1_00.csv
+```
+
+Install the required Python packages if needed:
+
+```bash
+python3 -m pip install pandas tabulate
+```
+
+The report includes the sampler, wind-speed range, sample count, and elapsed time for each bin, followed by the total runtime calculated from the `Length(s)` column.
 
 ## GPS / Timestamping
 - GPS is used to provide timestamps in the format `YYYY-MM-DD,HH:MM:SS`.
