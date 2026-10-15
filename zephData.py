@@ -30,6 +30,8 @@ def analyze_csv(filename, array=ARRAY):
     df = pd.read_csv(filename)
     wind = "WindSpeed(m/s)"
     length = "Length(s)"
+    temp = "Temp(F)"
+    temps = ()
     results = []
     samplers = list(array.keys())
     values = list(array.values())
@@ -53,10 +55,11 @@ def analyze_csv(filename, array=ARRAY):
             }
         )
     total_seconds = df[length].sum()
-    return results, total_seconds
+    temps = (df[temp].min(), df[temp].max())
+    return results, total_seconds, temps
 
 
-def print_results(results, total_seconds):
+def print_results(results, total_seconds, temps):
     table = [
         [r["Sampler"], r["Wind Speed (m/s)"], r["Samples"], r["Time"]] for r in results
     ]
@@ -69,14 +72,15 @@ def print_results(results, total_seconds):
     )
     print()
     print(f"Total runtime: {timedelta(seconds=int(total_seconds))}")
+    print(f"Temperature range: {temps[0]} - {temps[1]}")
 
 
 def main():
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} input.csv")
         sys.exit(1)
-    results, total_seconds = analyze_csv(sys.argv[1])
-    print_results(results, total_seconds)
+    results, total_seconds, temps = analyze_csv(sys.argv[1])
+    print_results(results, total_seconds, temps)
 
 
 if __name__ == "__main__":
