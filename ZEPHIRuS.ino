@@ -42,7 +42,7 @@
 
 #define DEBUG 0
 #define TRISONICA 0         // Use Trisonica anemometer connected to Serial1
-#define VERSION "20260915"  // Date last modified
+#define VERSION "20261015"  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -76,6 +76,7 @@ const unsigned char frowny[] PROGMEM = {
 time_t lastDebounceTime = 0;
 
 // BLUETOOTH
+BLEDfu bledfu;
 BLEDis bledis;
 BLEUart bleuart;
 char bleName[14];
@@ -569,12 +570,17 @@ void trisonica_get(void) {
 }
 #else
 void ble_init(void) {
+  // Bandwidth and connection settings must be set before Bluefruit.begin().
+  Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
+  Bluefruit.configPrphConn(92, BLE_GAP_EVENT_LENGTH_MIN, 16, 16);
   Bluefruit.begin(1, 0);
-  Bluefruit.setTxPower(4);  // Check bluefruit.h for supported values
+  Bluefruit.setTxPower(8);  // Check bluefruit.h for supported values
   Bluefruit.setName(bleName);
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
   bleuart.setRxCallback(bleuart_rx_callback);
+  // OTA Updates
+  bledfu.begin();
   // Device Info
   bledis.setModel("ZEPHIRuS Sampler");
   bledis.setSerialNum(bleName);
