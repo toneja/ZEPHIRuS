@@ -341,8 +341,8 @@ void led_loop(int count) {
 #if DEBUG
 void serial_init(void) {
   Serial.begin(115200);
-  delay(2000);
-  // while (!Serial) { delay(100); }
+  uint32_t start = millis();
+  while (!Serial && millis() - start < 3000) delay(10);  // wait up to 3 s for a monitor
   Serial.printf("ZEPHIRuS - SAMPLER VERSION %s\n", VERSION);
 }
 #endif
