@@ -42,7 +42,7 @@
 
 #define DEBUG 0
 #define TRISONICA 0         // Use Trisonica anemometer connected to Serial1
-#define VERSION "20261015"  // Date last modified
+#define VERSION "20261119"  // Date last modified
 
 // DISPLAY
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2);  // R2 = Rotate display 180°
@@ -93,9 +93,9 @@ time_t lastPollingTime = 0;
 #endif
 char envMsg[ENV_BUF_SIZE];
 struct EnvironmentData {
-  float windSpeed;
-  float windDir;
-  float windTemp;
+  uint8_t isRaining;
+  float dailyRainfall;
+  int32_t lastRaining;
   // float leafWetness;
 };
 EnvironmentData observed = {};
@@ -200,17 +200,17 @@ void loop() {
       char* token;
       token = strtok(msgCopy, ",");
       if (token == NULL || strlen(token) <= 0) { return; }
-      pendingData.windSpeed = atof(token);
+      pendingData.isRaining = atoi(token);
       token = strtok(NULL, ",");
       if (token == NULL || strlen(token) <= 0) { return; }
-      pendingData.windDir = atof(token);
+      pendingData.dailyRainfall = atof(token);
       token = strtok(NULL, ",");
       if (token == NULL || strlen(token) <= 0) { return; }
-      pendingData.windTemp = atof(token);
+      pendingData.lastRaining = atoi(token);
       observed = pendingData;
       bme680_get();  // Onboard temperature
 #if DEBUG
-      Serial.printf("WindSpeed: %.2f, WindDir: %.1f, WindTemp: %.1f\n", observed.windSpeed, observed.windDir, observed.windTemp);
+      Serial.printf("Raining: %s, Daily Rainfall: %.1fmm, Last Rain: %ld seconds ago\n", observed.isRaining ? "YES" : "NO", observed.dailyRainfall, observed.lastRaining);
 #endif
       // Handle relay and perform all I/O here
       relay_handler();
@@ -297,7 +297,7 @@ void oled_update() {
 #endif
     // Onboard temperature
     memset(displayMsg, 0, sizeof(displayMsg));
-    snprintf(displayMsg, sizeof(displayMsg), "TEMP  %.1fF", (bme.temperature * 1.8) + 32);
+    snprintf(displayMsg, sizeof(displayMsg), "TEMP  %.1fC", bme.temperature);
     u8g2.drawStr(0, 15, displayMsg);
     // Battery voltage
     memset(displayMsg, 0, sizeof(displayMsg));
@@ -429,14 +429,13 @@ void sd_init(void) {
   csvFile = SD.open(csvFilename, FILE_WRITE);
   if (!csvFile) { error("CSV FILE", "Unable to create CSV file."); }
   if (csvFile.size() == 0) {
-    csvFile.println("Date,Time(UTC),Temp(F),WindSpeed(m/s),WindDir,WindTemp(C),Length(s)");
+    csvFile.println("Date,Time(UTC),Temp(C),Raining,Rainfall(mm),Last Rain(s),Length(s)");
     csvFile.flush();
   }
   logFile = SD.open("ZEPHIRuS.txt", FILE_WRITE);
   if (!logFile) { error("LOG FILE", "Unable to create TXT file."); }
   logFile.printf("==========================================\n");
   logFile.printf("%s VERSION %s\nBattery voltage: %.2f\n", bleName, VERSION, voltage);
-  logFile.printf("Targeted wind speeds: %.2f, %.2f, %.2f, %.2f m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
   logFile.printf("Targeted pathogen: %s\n", pathogenName);
   logFile.printf("Output file: %s\n", csvFilename);
   logFile.flush();
@@ -451,20 +450,12 @@ void load_config(void) {
   if (jsonError) { error("JSON CONFIG", "Unable to read json configuration."); }
   if (!doc.containsKey("ZEPHIRuS") || strlen(doc["ZEPHIRuS"]) > 4) { error("ZEPHIRuS ID", "Config error: 'ZEPHIRuS'"); }
   if (!doc.containsKey("Pathogen") || strlen(doc["Pathogen"]) > 32) { error("Pathogen ID", "Config error: 'Pathogen'"); }
-  if (!doc.containsKey("windSpeeds") || doc["windSpeeds"].size() != RELAY_COUNT) { error("WINDSPEEDS", "Config error: 'windSpeeds'"); }
   strncpy(zephID, doc["ZEPHIRuS"], sizeof(zephID) - 1);
   zephID[sizeof(zephID) - 1] = '\0';
   snprintf(bleName, sizeof(bleName), "ZEPHIRuS-%s", zephID);
   strncpy(pathogenName, doc["Pathogen"], sizeof(pathogenName) - 1);
   pathogenName[sizeof(pathogenName) - 1] = '\0';
-  JsonArray array = doc["windSpeeds"];
-  uint8_t i = 0;
-  for (JsonVariant value : array) {
-    targeted[i] = value.as<float>();
-    i++;
-  }
 #if DEBUG
-  Serial.printf("Targeted wind speeds: %.2f, %.2f, %.2f, %.2f m/s\n", targeted[0], targeted[1], targeted[2], targeted[3]);
   Serial.printf("Targeted pathogen: %s\n", pathogenName);
 #endif
 }
@@ -540,7 +531,7 @@ void bme680_init(void) {
 void bme680_get(void) {
   bme.performReading();
 #if DEBUG
-  Serial.printf("Onboard temperature %.1f°F\n", (bme.temperature * 1.8) + 32);
+  Serial.printf("Onboard temperature %.1f°C\n", bme.temperature);
 #endif
 }
 
@@ -629,7 +620,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
 void bleuart_rx_callback(uint16_t conn_handle) {
   // Read BLEUart data
   uint8_t len = bleuart.available();
-  if (len < 0) { return; }
+  if (len <= 0) { return; }
   memset(envMsg, 0, ENV_BUF_SIZE);  // clear the msg buffer
   uint8_t i = 0;
   while (bleuart.available()) { envMsg[i++] = bleuart.read(); }
@@ -639,36 +630,39 @@ void bleuart_rx_callback(uint16_t conn_handle) {
 #endif
 
 void relay_handler(void) {
-  for (uint8_t relay = 0; relay < RELAY_COUNT; relay++) {
-    if (sampling_conditions(relay)) {
-      if (samplerActive && samplerActive != relayPins[relay]) { disable_relay(false); }
-      if (!samplerActive) { enable_relay(relay); }
-    } else {
-      if (samplerActive == relayPins[relay]) { disable_relay(false); }
-    }
+  // Activate all samplers with the same conditions for now
+  if (!samplerActive && sampling_conditions()) {
+    enable_relay();
+  }
+  // Deactivate samplers if it starts raining or if it gets too cold
+  if (samplerActive && (observed.isRaining || bme.temperature < 3.0)) {
+    disable_relay(false);
+  }
+  // Deactivate if samplers have been running for 6 hours
+  if (samplerActive && (millis() - startTime) / 1000 >= 60 * 60 * 6) {
+    disable_relay(false);
   }
   // Refresh display data
   oled_update();
 }
 
-bool sampling_conditions(uint8_t relay) {
-  if (relay < RELAY_COUNT - 1) {
-    // upper bound is the next sampling target
-    return observed.windSpeed >= targeted[relay] && observed.windSpeed < targeted[relay + 1];
-  }
-  // final sampler in the relay samples with no upper bound
-  return observed.windSpeed >= targeted[relay];
+bool sampling_conditions(void) {
+  // Activate all samplers with the same conditions for now
+  // Not raining, daily rainfall >= 2.5mm, at least 2 hours since last rain, and above freezing
+  return !observed.isRaining && observed.dailyRainfall >= 2.5 && observed.lastRaining >= 60 * 60 * 2 && bme.temperature > 3.0;
 }
 
-void enable_relay(uint8_t relay) {
-  samplerActive = relayPins[relay];
+void enable_relay(void) {
+  samplerActive = 1;
   startTime = millis();
+  for (uint8_t relay = 0; relay < RELAY_COUNT; relay++) {
 #if DEBUG
-  Serial.printf("Sampler [%d] Active ... \n", relay + 1);
+    Serial.printf("Sampler [%d] Active ... \n", relay + 1);
 #endif
-  // RELAY ON
-  digitalWrite(samplerActive, HIGH);
-  sampleCount[relay]++;
+    // RELAY ON
+    digitalWrite(relayPins[relay], HIGH);
+    sampleCount[relay]++;
+  }
   log_data();
 }
 
@@ -677,8 +671,10 @@ void disable_relay(bool override) {
 #if DEBUG
   Serial.printf(" ... Sampling complete after %d seconds.\n", sampleLength);
 #endif
-  // Relay OFF
-  digitalWrite(samplerActive, LOW);
+  for (uint8_t relay = 0; relay < RELAY_COUNT; relay++) {
+    // Relay OFF
+    digitalWrite(relayPins[relay], LOW);
+  }
   if (override) { digitalWrite(LED_GREEN, LOW); }
   samplerActive = 0;
   log_data();
@@ -687,12 +683,12 @@ void disable_relay(bool override) {
 void log_data(void) {
   if (samplerActive) {
     gps_gettime();
-    csvFile.printf("%s,%.1f,%.2f,%.1f,%.1f",
+    csvFile.printf("%s,%.1f,%s,%.1f,%ld",
                    timestamp,
-                   (bme.temperature * 1.8) + 32,
-                   observed.windSpeed,
-                   observed.windDir,
-                   observed.windTemp);
+                   bme.temperature,
+                   observed.isRaining ? "YES" : "NO",
+                   observed.dailyRainfall,
+                   observed.lastRaining);
   } else {
     csvFile.printf(",%d\n",
                    sampleLength);
